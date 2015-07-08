@@ -25,7 +25,7 @@ RKT_REQ_ABS_PROG([ABS_GO], [go])
 m4_define([DEFAULT_FLAVOR], [coreos])
 AC_ARG_WITH(stage1,
             AS_HELP_STRING([--with-stage1=type],
-                           [type of stage1 build one of 'src', 'coreos', 'host', 'none' (default: 'DEFAULT_FLAVOR')]),
+                           [type of stage1 build one of 'src', 'coreos', 'host', 'none', 'kvm' (default: 'DEFAULT_FLAVOR')]),
             [RKT_STAGE1_USR_FROM="${withval}"],
             [RKT_STAGE1_USR_FROM="coreos"])
 
@@ -47,6 +47,8 @@ AS_CASE([${RKT_STAGE1_USR_FROM}],
                  RKT_REQ_PROG([INTLTOOLIZE],[intltoolize],[intltoolize])
                  RKT_REQ_PROG([LIBTOOLIZE],[libtoolize],[libtoolize])],
         [host],
+                [],
+        [kvm],
                 [],
         [AC_MSG_ERROR([*** stage1 build type '${RKT_STAGE1_USR_FROM}' unsupported])])
 
