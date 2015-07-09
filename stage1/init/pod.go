@@ -209,7 +209,7 @@ func (p *Pod) appToSystemd(ra *schema.RuntimeApp, interactive bool) error {
 		unit.NewUnitOption("Service", "Group", "0"),
 	}
 
-	_, systemdStage1Version, err := p.getFlavor()
+	flavor, systemdStage1Version, err := p.getFlavor()
 	if err != nil {
 		return fmt.Errorf("Failed to get stage1 flavor: %v\n", err)
 	}
@@ -317,6 +317,15 @@ func (p *Pod) appToSystemd(ra *schema.RuntimeApp, interactive bool) error {
 		return fmt.Errorf("failed to link service want: %v", err)
 	}
 
+	if flavor == "kvm" {
+		// bind mount all shared volumes from /mnt/volumeName (we don't use mechanism for bind-mounting given by nspawn)
+		err := appToSystemdMountUnits(common.Stage1RootfsPath(p.Root), ra.Image.ID, app.MountPoints)
+		if err != nil {
+			return fmt.Errorf("failed to prepare mount units: %v", err)
+		}
+
+	}
+
 	return nil
 }
 
@@ -340,7 +349,17 @@ func (p *Pod) writeEnvFile(env types.Environment, id types.Hash) error {
 
 // PodToSystemd creates the appropriate systemd service unit files for
 // all the constituent apps of the Pod
-func (p *Pod) PodToSystemd(interactive bool) error {
+func (p *Pod) PodToSystemd(interactive bool, flavor string) error {
+
+	if flavor == "kvm" {
+		// mount host volumes through some remote file system e.g. 9p to /mnt/volumeName location
+		// order is import because pod volumes are used to create empty folder that each app then use
+		err := podToSystemdHostMountUnits(common.Stage1RootfsPath(p.Root), p.Manifest.Volumes)
+		if err != nil {
+			return fmt.Errorf("failed to tranform pod volumes into mount units: %v", err)
+		}
+	}
+
 	for i := range p.Manifest.Apps {
 		ra := &p.Manifest.Apps[i]
 		if err := p.appToSystemd(ra, interactive); err != nil {
