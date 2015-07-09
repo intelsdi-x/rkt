@@ -25,3 +25,6 @@ install -d "$ROOT/rkt/env"
 # ln lib64 requierd for systemd
 ln -s "/usr/lib64" "$ROOT/lib64"
 ln -s "/usr/lib" "$ROOT/lib"
+
+# systemd expects to have /bin/mount (not in usr)
+ln -s "/usr/bin" "$ROOT/bin"

@@ -289,9 +289,15 @@ func getArgsEnv(p *Pod, flavor string, systemdStage1Version string, debug bool) 
 			args = append(args, "--debug")
 		}
 
-		// TODO: host volume sharing with 9p
 		// TODO: append additional networks settings
 		// args = append(args, network/volumes args...)
+
+		// host volume sharing with 9p
+		nsargs, err := PodToKvmDiskArgs(p.Manifest.Volumes)
+		if err != nil {
+			return nil, nil, fmt.Errorf("Failed to generate systemd kvm args: %v", err)
+		}
+		args = append(args, nsargs...)
 
 		return args, env, nil
 
@@ -551,7 +557,7 @@ func stage1() int {
 		return 2
 	}
 
-	if err = p.PodToSystemd(interactive); err != nil {
+	if err = p.PodToSystemd(interactive, flavor); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to configure systemd: %v\n", err)
 		return 2
 	}
