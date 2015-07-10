@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenSSH server daemon
+DefaultDependencies=no
+
+[Service]
+ExecStartPre=/usr/bin/chown -R root /etc
+ExecStartPre=/usr/bin/chown -R root:root /root
+ExecStartPre=/usr/bin/chown -R root /var
+ExecStartPre=/usr/bin/chmod -R 700 /root
+ExecStartPre=/usr/bin/ssh-keygen -A
+ExecStart=/usr/sbin/sshd -D -e
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=default.target
