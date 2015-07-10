@@ -20,6 +20,7 @@ SQUASH="usr.squashfs"
 ROOTFS="rootfs"
 USR="rootfs/usr"
 FILELIST="manifest.txt"
+MANIFESTD_PATH="$1"
 
 # always start with an empty rootfs
 [ -e "${ROOTFS}" ] && rm -Rf "${ROOTFS}"
@@ -27,7 +28,7 @@ FILELIST="manifest.txt"
 mkdir -p "${ROOTFS}"
 
 # create consolidated file list
-cat manifest.d/* | sort -u > "${FILELIST}"
+cat "$MANIFESTD_PATH"/* | sort -u > "${FILELIST}"
 
 # derive $SQUASH from $CACHED_IMG
 gzip -cd "${CACHED_IMG}" | cpio --unconditional --extract "${SQUASH}"

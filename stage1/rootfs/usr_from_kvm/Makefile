@@ -2,7 +2,7 @@
 #
 
 usr.done: Makefile install kernel/bzImage kvmtool/lkvm
-	$(MAKE) -C ../usr_from_coreos
+	$(MAKE) -C ../usr_from_coreos MANIFESTD_PATH=../usr_from_kvm/manifest.d
 	cp -f install ../aggregate/install.d/00usr
 
 kvmtool/lkvm: 
