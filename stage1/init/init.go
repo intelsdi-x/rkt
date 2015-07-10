@@ -233,6 +233,26 @@ func installAssets() error {
 	return proj2aci.PrepareAssets(assets, "./stage1/rootfs/", nil)
 }
 
+// getKVMNetParams returns networks parameters for given pod
+func getKVMNetParams() ([]string, string, error) {
+	lkvmParams := []string{}
+
+	hostIP := os.Getenv("KVM_HOST_IP")
+	guestIP := os.Getenv("KVM_GUEST_IP")
+	if hostIP == "" || guestIP == "" {
+		return nil, "", fmt.Errorf("Missing KVM_HOST_IP or KVM_GUEST_IP in environment.")
+	}
+
+	// https://www.kernel.org/doc/Documentation/filesystems/nfs/nfsroot.txt
+	// ip=<client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>:<dns0-ip>:<dns1-ip>
+	kernelParams := "ip=" + guestIP + ":::255.255.255.252:eth0:::"
+	lkvmParams = append(lkvmParams, "--network", "mode=tap,host_ip="+hostIP+",guest_ip="+guestIP)
+
+	// TODO: additional networks from --private-net
+
+	return lkvmParams, kernelParams, nil
+}
+
 // getArgsEnv returns the nspawn args and env according to the usr used
 func getArgsEnv(p *Pod, flavor string, systemdStage1Version string, debug bool) ([]string, []string, error) {
 	args := []string{}
@@ -244,6 +264,10 @@ func getArgsEnv(p *Pod, flavor string, systemdStage1Version string, debug bool) 
 		// TODO: move to path.go
 		kernelPath := filepath.Join(common.Stage1RootfsPath(p.Root), "bzImage")
 		lkvmPath := filepath.Join(common.Stage1RootfsPath(p.Root), "lkvm")
+		lkvmNetParams, kernelNetParams, err := getKVMNetParams()
+		if err != nil {
+			return nil, nil, err
+		}
 
 		// TODO: base on resource isolators
 		cpu := 1
@@ -256,6 +280,7 @@ func getArgsEnv(p *Pod, flavor string, systemdStage1Version string, debug bool) 
 			"noreplace-smp " +
 			"systemd.default_standard_error=journal+console " +
 			"systemd.default_standard_output=journal+console " +
+			kernelNetParams + " " +
 			// "systemd.default_standard_output=tty " +
 			"tsc=reliable " +
 			"MACHINEID=" + p.UUID.String()
@@ -284,6 +309,7 @@ func getArgsEnv(p *Pod, flavor string, systemdStage1Version string, debug bool) 
 			"--params", kernelParams,
 		}...,
 		)
+		args = append(args, lkvmNetParams...)
 
 		if debug {
 			args = append(args, "--debug")
