@@ -198,6 +198,7 @@ func (p *Pod) appToSystemd(ra *schema.RuntimeApp, interactive bool) error {
 
 	execWrap := []string{"/diagexec", common.RelAppRootfsPath(id), workDir, RelEnvFilePath(id), strconv.Itoa(uid), strconv.Itoa(gid)}
 	execStart := quoteExec(append(execWrap, app.Exec...))
+	execStart = "/usr/bin/bash" // bash emergency console/works best with busybox installed
 	opts := []*unit.UnitOption{
 		unit.NewUnitOption("Unit", "Description", name),
 		unit.NewUnitOption("Unit", "DefaultDependencies", "false"),
@@ -300,8 +301,8 @@ func (p *Pod) appToSystemd(ra *schema.RuntimeApp, interactive bool) error {
 		opts = append(opts, unit.NewUnitOption("Unit", "Requires", SocketUnitName(id)))
 	}
 
-	opts = append(opts, unit.NewUnitOption("Unit", "Requires", InstantiatedPrepareAppUnitName(id)))
-	opts = append(opts, unit.NewUnitOption("Unit", "After", InstantiatedPrepareAppUnitName(id)))
+	// opts = append(opts, unit.NewUnitOption("Unit", "Requires", InstantiatedPrepareAppUnitName(id)))
+	// opts = append(opts, unit.NewUnitOption("Unit", "After", InstantiatedPrepareAppUnitName(id)))
 
 	file, err := os.OpenFile(ServiceUnitPath(p.Root, id), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
