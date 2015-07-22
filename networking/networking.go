@@ -15,13 +15,17 @@
 package networking
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"strings"
 	"syscall"
 
+	"github.com/coreos/rkt/Godeps/_workspace/src/github.com/appc/cni/pkg/ip"
 	"github.com/coreos/rkt/Godeps/_workspace/src/github.com/appc/cni/pkg/ns"
+	"github.com/coreos/rkt/Godeps/_workspace/src/github.com/appc/cni/pkg/plugin"
 	"github.com/coreos/rkt/Godeps/_workspace/src/github.com/appc/spec/schema/types"
 	"github.com/coreos/rkt/Godeps/_workspace/src/github.com/vishvananda/netlink"
 
@@ -48,6 +52,60 @@ type Networking struct {
 
 	hostNS *os.File
 	nets   []activeNet
+}
+
+func KvmSetupNetworks(podRoot string, podID types.UUID, fps []ForwardedPort, privateNetList common.PrivateNetList, string localConfig) (*Networking, error) {
+	net := Networking{
+		podEnv: podEnv{
+			podRoot:      podRoot,
+			podID:        podID,
+			netsLoadList: privateNetList,
+			localConfig:  localConfig,
+		},
+	}
+	var e error
+	net.nets, e = net.loadNets()
+	if e != nil {
+		return nil, fmt.Errorf("error loading network definitions: %v", e)
+	}
+
+	n := activeNet{}
+	for _, n = range net.nets {
+		if strings.HasPrefix(n.conf.Name, "default") {
+			n.conf.Type = "host-local-ptp"
+			n.runtime.IfName = "..."
+			output, err := net.execNetPlugin("ADD", &n, "...")
+			if err != nil {
+				return nil, nil, err
+			}
+
+			pr := plugin.Result{}
+			if err = json.Unmarshal(output, &pr); err != nil {
+				return nil, nil, fmt.Errorf("error parsing %q result: %v", n.conf.Name, err)
+			}
+
+			if pr.IP4 == nil {
+				return nil, nil, fmt.Errorf("net-plugin returned no IPv4 configuration")
+			}
+
+			n.runtime.IP, n.runtime.HostIP = pr.IP4.IP.IP, pr.IP4.Gateway
+
+			if n.conf.IPMasq {
+				chain := "CNI-" + n.conf.Name
+				if err = ip.SetupIPMasq(pr.IP4.IP, chain); err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			// TODO: add private nets support
+		}
+	}
+	err := net.forwardPorts(fps, net.GetDefaultIP())
+	if err != nil {
+		return nil, err
+	}
+
+	return &net, nil
 }
 
 // Setup creates a new networking namespace and executes network plugins to
@@ -219,6 +277,10 @@ func (e *Networking) Save() error {
 	}
 
 	return netinfo.Save(e.podRoot, nis)
+}
+
+func (e *Networking) GetNetworks() []activeNet {
+	return e.nets
 }
 
 func newNetNS() (hostNS, childNS *os.File, err error) {
