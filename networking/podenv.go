@@ -194,6 +194,10 @@ func loadNet(filepath string) (*activeNet, error) {
 	}, nil
 }
 
+func (n *activeNet) GetRuntime() *netinfo.NetInfo {
+	return n.runtime
+}
+
 func copyFileToDir(src, dstdir string) (string, error) {
 	dst := filepath.Join(dstdir, filepath.Base(src))
 
