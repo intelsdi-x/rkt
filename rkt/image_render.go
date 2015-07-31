@@ -29,7 +29,7 @@ import (
 var (
 	cmdImageRender = &cobra.Command{
 		Use:   "render IMAGE OUTPUT_DIR",
-		Short: "render a stored image to a directory with all its dependencies",
+		Short: "Render a stored image to a directory with all its dependencies",
 		Long:  `IMAGE should be a string referencing an image: either a hash or an image name.`,
 		Run:   runWrapper(runImageRender),
 	}
@@ -56,7 +56,7 @@ func runImageRender(cmd *cobra.Command, args []string) (exit int) {
 		return 1
 	}
 
-	key, err := getKeyFromAppOrHash(s, args[0])
+	key, err := getStoreKeyFromAppOrHash(s, args[0])
 	if err != nil {
 		stderr("image render: %v", err)
 		return 1

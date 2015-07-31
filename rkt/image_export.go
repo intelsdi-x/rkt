@@ -26,7 +26,7 @@ import (
 var (
 	cmdImageExport = &cobra.Command{
 		Use:   "export IMAGE OUTPUT_ACI_FILE",
-		Short: "export a stored image to an ACI file",
+		Short: "Export a stored image to an ACI file",
 		Long:  `IMAGE should be a string referencing an image: either a hash or an image name.`,
 		Run:   runWrapper(runImageExport),
 	}
@@ -50,7 +50,7 @@ func runImageExport(cmd *cobra.Command, args []string) (exit int) {
 		return 1
 	}
 
-	key, err := getKeyFromAppOrHash(s, args[0])
+	key, err := getStoreKeyFromAppOrHash(s, args[0])
 	if err != nil {
 		stderr("image export: %v", err)
 		return 1

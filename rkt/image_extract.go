@@ -30,7 +30,7 @@ import (
 var (
 	cmdImageExtract = &cobra.Command{
 		Use:   "extract IMAGE OUTPUT_DIR",
-		Short: "extract a stored image to a directory",
+		Short: "Extract a stored image to a directory",
 		Long:  `IMAGE should be a string referencing an image: either a hash or an image name.`,
 		Run:   runWrapper(runImageExtract),
 	}
@@ -57,7 +57,7 @@ func runImageExtract(cmd *cobra.Command, args []string) (exit int) {
 		return 1
 	}
 
-	key, err := getKeyFromAppOrHash(s, args[0])
+	key, err := getStoreKeyFromAppOrHash(s, args[0])
 	if err != nil {
 		stderr("image extract: %v", err)
 		return 1
