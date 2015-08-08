@@ -16,26 +16,45 @@ package kvm
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/coreos/rkt/networking"
 )
 
-// GetKVMNetParams returns additional arguments that need to be passed to kernel and lkvm tool to configure networks properly
-// parameters are based on Network configuration extracted from Networking struct
+// something that exposes description of network
+type NetDescriber interface {
+	HostIP() net.IP
+	GuestIP() net.IP
+	Mask() net.IP
+	IfName() string
+	IPMasq() bool
+}
+
+// GetKVMNetParams returns additional arguments that need to be passed to kernel
+// and lkvm tool to configure networks properly.
+// Logic is based on Network configuration extracted from Networking struct
+// and essentially from activeNets that expose NetDescriber behavior
 func GetKVMNetArgs(n *networking.Networking) ([]string, []string, error) {
+
+	// convert activeNets to NetDescribers
+	nds := []NetDescriber{}
+	for _, an := range n.GetActiveNetworks() {
+		nds = append(nds, an)
+	}
+
 	lkvmArgs := []string{}
 	kernelParams := []string{}
 
-	for i, netParams := range n.GetNetworkParameters() {
+	for i, nd := range nds {
 		// https://www.kernel.org/doc/Documentation/filesystems/nfs/nfsroot.txt
 		// ip=<client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>:<dns0-ip>:<dns1-ip>
 		var gw string
-		if netParams.IPMasq {
-			gw = netParams.HostIP.String()
+		if nd.IPMasq() {
+			gw = nd.HostIP().String()
 		}
-		kernelParams = append(kernelParams, "ip="+netParams.GuestIP.String()+"::"+gw+":"+netParams.Mask.String()+":"+fmt.Sprintf(networking.IfNamePattern, i)+":::")
+		kernelParams = append(kernelParams, "ip="+nd.GuestIP().String()+"::"+gw+":"+nd.Mask().String()+":"+fmt.Sprintf(networking.IfNamePattern, i)+":::")
 
-		lkvmArgs = append(lkvmArgs, "--network", "mode=tap,tapif="+netParams.IfName+",host_ip="+netParams.HostIP.String()+",guest_ip="+netParams.GuestIP.String())
+		lkvmArgs = append(lkvmArgs, "--network", "mode=tap,tapif="+nd.IfName()+",host_ip="+nd.HostIP().String()+",guest_ip="+nd.GuestIP().String())
 	}
 
 	return lkvmArgs, kernelParams, nil
