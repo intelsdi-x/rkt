@@ -15,17 +15,22 @@
 package kvm
 
 import (
+	"runtime"
+
 	"github.com/coreos/rkt/Godeps/_workspace/src/github.com/appc/spec/schema"
 	"github.com/coreos/rkt/Godeps/_workspace/src/github.com/appc/spec/schema/types"
 )
 
-// findResources find value of last isolator for particular type.
+// findResources finds value of last isolator for particular type.
 func findResources(isolators types.Isolators) (mem, cpus int64) {
+	mem = 128
 	for _, i := range isolators {
 		switch v := i.Value().(type) {
 		case *types.ResourceMemory:
 			memQuantity := v.Limit()
 			mem = memQuantity.Value()
+			// Convert bytes into megabytes
+			mem /= 1024 * 1024
 		case *types.ResourceCPU:
 			cpusQuantity := v.Limit()
 			cpus = cpusQuantity.Value()
@@ -35,16 +40,29 @@ func findResources(isolators types.Isolators) (mem, cpus int64) {
 	return mem, cpus
 }
 
-// GetAppsResources return values specfied by user in pod-manifest.
+// GetAppsResources returns values specfied by user in pod-manifest.
 // Function expects a podmanifest apps.
-// Return aggregate quantity of mem[B] and cpus.
-func GetAppsResources(apps schema.AppList) (total_cpus, total_mem int64) {
+// Return aggregate quantity of mem (in MB) and cpus.
+func GetAppsResources(apps schema.AppList) (totalCpus, totalMem int64) {
+	cpusSpecified := true
+	var flag bool
 	for i := range apps {
 		ra := &apps[i]
 		app := ra.App
 		mem, cpus := findResources(app.Isolators)
-		total_cpus += cpus
-		total_mem += mem
+		flag = cpus != 0
+		cpusSpecified = cpusSpecified && flag
+		totalCpus += cpus
+		totalMem += mem
 	}
-	return total_cpus, total_mem
+	// If user doesn't specify cpus for at least one app, we set no limit for
+	// whole pod.
+	if !cpusSpecified {
+		totalCpus = int64(runtime.NumCPU())
+	}
+
+	// Increase amount of memory by 128MB for system.
+	totalMem += 128
+
+	return totalCpus, totalMem
 }
