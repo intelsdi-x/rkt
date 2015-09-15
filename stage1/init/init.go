@@ -47,7 +47,6 @@ package main
 //   sd_pid_get_slice = (int (*)(pid_t, char **))f;
 //   return sd_pid_get_slice(pid, slice);
 // }
-//
 import "C"
 
 // this implements /init of stage1/nspawn+systemd
@@ -263,9 +262,7 @@ func getArgsEnv(p *Pod, flavor string, debug bool, n *networking.Networking) ([]
 			return nil, nil, err
 		}
 
-		// TODO: base on resource isolators
-		cpu := 1
-		mem := 128
+		cpu, mem := kvm.GetAppsResources(p.Manifest.Apps)
 
 		kernelParams := []string{
 			"console=hvc0",
@@ -296,8 +293,8 @@ func getArgsEnv(p *Pod, flavor string, debug bool, n *networking.Networking) ([]
 			"run",
 			"--name", "rkt-" + p.UUID.String(),
 			"--no-dhcp", // speed bootup
-			"--cpu", strconv.Itoa(cpu),
-			"--mem", strconv.Itoa(mem),
+			"--cpu", strconv.FormatInt(cpu, 10),
+			"--mem", strconv.FormatInt(mem, 10),
 			"--console=virtio",
 			"--kernel", kernelPath,
 			"--disk", "stage1/rootfs", // relative to run/pods/uuid dir this is a place where systemd resides
