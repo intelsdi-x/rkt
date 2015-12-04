@@ -90,7 +90,15 @@ func TestCaps(t *testing.T) {
 		defer os.Remove(stage2FileName)
 		stageFileNames := []string{stage1FileName, stage2FileName}
 
-		for _, stage := range []int{1, 2} {
+		var stages []int
+		if isKVM() {
+			fmt.Printf("KVM will always has got full capabilities, but It also has got full isolation from host. SKipping \n")
+			stages = append(stages, 2)
+		} else {
+			stages = append(stages, []int{1, 2}...)
+		}
+
+		for _, stage := range stages {
 			t.Logf("Running test #%v: %v [stage %v]", i, tt.testName, stage)
 
 			cmd := fmt.Sprintf("%s --debug --insecure-options=image run --mds-register=false --set-env=CAPABILITY=%d %s", ctx.Cmd(), int(tt.capa), stageFileNames[stage-1])
