@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/coreos/rkt/Godeps/_workspace/src/github.com/coreos/gexpect"
 	"github.com/coreos/rkt/tests/testutils/logger"
@@ -63,10 +64,15 @@ func (d *dirDesc) cleanup() {
 	if d.dir == "" {
 		return
 	}
-	if err := os.RemoveAll(d.dir); err != nil && !os.IsNotExist(err) {
-		panic(fmt.Sprintf("Failed to remove temporary %s directory %q: %s", d.desc, d.dir, err))
+	for {
+		if err := os.RemoveAll(d.dir); err != nil && !os.IsNotExist(err) {
+			logger.Logf("Cannot remove %q. Waiting...", d.dir)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		d.dir = ""
+		break
 	}
-	d.dir = ""
 }
 
 // rktOption returns option for rkt invocation
@@ -151,18 +157,21 @@ func (ctx *RktRunCtx) cleanupChildren() error {
 }
 
 func (ctx *RktRunCtx) Cleanup() {
-	if ctx.mds != nil {
-		ctx.mds.Process.Kill()
-		ctx.mds.Wait()
-		os.Remove("/run/rkt/metadata-svc.sock")
-	}
-	if err := ctx.cleanupChildren(); err != nil {
-		logger.Logf("Error during child cleanup: %v", err)
-	}
-	ctx.RunGC()
-	for _, d := range ctx.directories {
-		d.cleanup()
-	}
+
+	go func() {
+		if ctx.mds != nil {
+			ctx.mds.Process.Kill()
+			ctx.mds.Wait()
+			os.Remove("/run/rkt/metadata-svc.sock")
+		}
+		if err := ctx.cleanupChildren(); err != nil {
+			logger.Logf("Error during child cleanup: %v", err)
+		}
+		ctx.RunGC()
+		for _, d := range ctx.directories {
+			d.cleanup()
+		}
+	}()
 }
 
 func (ctx *RktRunCtx) RunGC() {

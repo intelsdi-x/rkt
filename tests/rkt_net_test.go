@@ -34,6 +34,10 @@ import (
  * Container must have the same network namespace as the host
  */
 func TestNetHost(t *testing.T) {
+	if isKVM() {
+		t.Skip("--net=host is not available in KVM flavor")
+	}
+
 	testImageArgs := []string{"--exec=/inspect --print-netns"}
 	testImage := patchTestACI("rkt-inspect-networking.aci", testImageArgs...)
 	defer os.Remove(testImage)
@@ -69,6 +73,10 @@ func TestNetHost(t *testing.T) {
  * localhost address
  */
 func TestNetHostConnectivity(t *testing.T) {
+	if isKVM() {
+		t.Skip("--net=host is not available in KVM flavor")
+	}
+
 	logger.SetLogger(t)
 
 	httpPort, err := testutils.GetNextFreePort4()
@@ -122,9 +130,13 @@ func TestNetHostConnectivity(t *testing.T) {
  * must be in an empty netns
  */
 func TestNetNone(t *testing.T) {
+	if isKVM() {
+		t.Skip("--net=none is not available in KVM flavor")
+	}
+
 	testImageArgs := []string{"--exec=/inspect --print-netns --print-iface-count"}
 	testImage := patchTestACI("rkt-inspect-networking.aci", testImageArgs...)
-	defer os.Remove(testImage)
+	// defer os.Remove(testImage)
 
 	ctx := testutils.NewRktRunCtx()
 	defer ctx.Cleanup()
@@ -164,7 +176,7 @@ func TestNetNone(t *testing.T) {
 
 /*
  * Default net
- * ---
+ * ---1
  * Container must be in a separate network namespace
  */
 func TestNetDefaultNetNS(t *testing.T) {
@@ -259,7 +271,7 @@ func TestNetDefaultConnectivity(t *testing.T) {
 			child := ga.SpawnOrFail(cmd)
 			defer ga.WaitOrFail(child)
 
-			expectedRegex := `HTTP-Get received: (.*)\r`
+			expectedRegex := `HTTP-Get received: (.*?)\r`
 			result, out, err := expectRegexWithOutput(child, expectedRegex)
 			if err != nil {
 				ga.Fatalf("Error: %v\nOutput: %v", err, out)
@@ -450,8 +462,9 @@ func testNetCustomDual(t *testing.T, nt networkTemplateT) {
 			ga.Fatalf("Error: %v\nOutput: %v", err, out)
 		}
 		container1IPv4 <- result[1]
-		expectedRegex = `(rkt-.*): serving on`
+		expectedRegex = ` ([a-zA-Z0-9\-]*): serving on`
 		result, out, err = expectRegexTimeoutWithOutput(child, expectedRegex, 30*time.Second)
+		fmt.Printf(out)
 		if err != nil {
 			ga.Fatalf("Error: %v\nOutput: %v", err, out)
 		}
@@ -473,7 +486,7 @@ func testNetCustomDual(t *testing.T, nt networkTemplateT) {
 		defer ga.WaitOrFail(child)
 
 		expectedHostname := <-container1Hostname
-		expectedRegex := `HTTP-Get received: (.*)\r`
+		expectedRegex := `HTTP-Get received: (.*?)\r`
 		result, out, err := expectRegexTimeoutWithOutput(child, expectedRegex, 20*time.Second)
 		if err != nil {
 			ga.Fatalf("Error: %v\nOutput: %v", err, out)
@@ -544,7 +557,7 @@ func testNetCustomNatConnectivity(t *testing.T, nt networkTemplateT) {
 		child := ga.SpawnOrFail(cmd)
 		defer ga.WaitOrFail(child)
 
-		expectedRegex := `HTTP-Get received: (.*)\r`
+		expectedRegex := `HTTP-Get received: (.*?)\r`
 		result, out, err := expectRegexWithOutput(child, expectedRegex)
 		if err != nil {
 			ga.Fatalf("Error: %v\nOutput: %v", err, out)

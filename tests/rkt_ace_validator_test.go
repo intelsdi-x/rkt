@@ -32,7 +32,7 @@ func TestAceValidator(t *testing.T) {
 	}
 	expected := []map[string]struct{}{
 		newStringSet("prestart"),
-		newStringSet("main", "sidekick"),
+		newStringSet("sidekick"),
 		newStringSet("poststop"),
 	}
 	pattern := `ace-validator\[\d+\]: ([[:alpha:]]+) OK`

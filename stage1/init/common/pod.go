@@ -36,6 +36,7 @@ import (
 	"github.com/coreos/rkt/common"
 	"github.com/coreos/rkt/common/cgroup"
 	"github.com/coreos/rkt/pkg/uid"
+	"github.com/coreos/rkt/stage1/init/kvm"
 )
 
 const (
@@ -376,7 +377,7 @@ func appToSystemd(p *stage1commontypes.Pod, ra *schema.RuntimeApp, interactive b
 			return fmt.Errorf("failed to prepare mount units: %v", err)
 		}
 
-		err = kvm.RemountCgroupsInsidePod(common.Stage1RootfsPath(p.Root), unitsDir, appName)
+		err = RemountCgroupsInsidePod(common.Stage1RootfsPath(p.Root), UnitsDir, appName)
 		if err != nil {
 			return fmt.Errorf("cgroups remounting failed %q", err)
 		}
