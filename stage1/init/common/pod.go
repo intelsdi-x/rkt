@@ -364,6 +364,10 @@ func appToSystemd(p *stage1commontypes.Pod, ra *schema.RuntimeApp, interactive b
 			return fmt.Errorf("failed to prepare mount units: %v", err)
 		}
 
+		err = kvm.RemountCgroupsInsidePod(common.Stage1RootfsPath(p.Root), unitsDir, appName)
+		if err != nil {
+			return fmt.Errorf("cgroups remounting failed %q", err)
+		}
 	}
 
 	if err = writeAppReaper(p, appName.String()); err != nil {
