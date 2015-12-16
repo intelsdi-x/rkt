@@ -66,3 +66,19 @@ func GetAppsResources(apps schema.AppList) (totalCpus, totalMem int64) {
 
 	return totalCpus, totalMem
 }
+
+// TODO: Add test and docstring here
+func GetAppCapabilities(app *types.App) []string {
+
+	var caps []string
+	for _, i := range app.Isolators {
+		switch v := i.Value().(type) {
+		case types.LinuxCapabilitiesSet:
+			// TODO: cleanup the API on LinuxCapabilitiesSet to give strings easily.
+			for _, c := range v.Set() {
+				caps = append(caps, string(c))
+			}
+		}
+	}
+	return caps
+}
