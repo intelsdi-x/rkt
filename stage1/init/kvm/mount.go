@@ -249,3 +249,30 @@ func VolumesToKvmDiskArgs(volumes []types.Volume) []string {
 
 	return args
 }
+
+//TODO: Functional test and docstring here
+func RemountCgroupsInsidePod(root, unitsDir string, appName types.ACName) error {
+
+	cgPath := filepath.Join(common.RelAppRootfsPath(appName), "sys/fs/cgroup")
+	escapedRoot := unit.UnitNamePathEscape(common.RelAppRootfsPath(appName))
+	prepareAppService := fmt.Sprintf("prepare-app@%v.service", escapedRoot)
+	uCmd := fmt.Sprintf("/bin/bash -c \"for cgroup in %v/*/; do mount -o ro,remount,bind $cgroup; done\"", cgPath)
+
+	opts := []*unit.UnitOption{
+		unit.NewUnitOption("Unit", "Description", fmt.Sprintf("Remount cgroups in read-only for %s", appName.String())),
+		unit.NewUnitOption("Unit", "DefaultDependencies", "false"),
+		unit.NewUnitOption("Unit", "Before", serviceUnitName(appName)),
+		unit.NewUnitOption("Unit", "After", prepareAppService),
+		unit.NewUnitOption("Unit", "Requires", prepareAppService),
+		unit.NewUnitOption("Service", "Type", "oneshot"),
+		unit.NewUnitOption("Service", "ExecStart", uCmd),
+		unit.NewUnitOption("Install", "RequiredBy", serviceUnitName(appName)),
+	}
+
+	remountUnitPath := filepath.Join(root, unitsDir, unit.UnitNamePathEscape(cgPath+"_remount.service"))
+	if err := writeUnit(opts, remountUnitPath); err != nil {
+		return err
+	}
+
+	return nil
+}

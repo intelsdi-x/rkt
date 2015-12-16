@@ -336,7 +336,7 @@ func main() {
 	}
 
 	if globalFlags.CheckCgroupMounts {
-		rootCgroupPath := "/proc/1/root/sys/fs/cgroup"
+		rootCgroupPath := "/sys/fs/cgroup"
 		testPaths := []string{rootCgroupPath}
 
 		// test a couple of controllers if they're available
