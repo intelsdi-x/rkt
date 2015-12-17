@@ -41,6 +41,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/coreos/rkt/Godeps/_workspace/src/github.com/appc/spec/schema"
@@ -171,9 +172,19 @@ func AppToSystemdMountUnits(root string, appName types.ACName, volumes []types.V
 
 		if vol.Kind == "empty" {
 			log.Printf("creating an empty volume folder for sharing: %q", whatFullPath)
-			err := os.MkdirAll(whatFullPath, 0700)
+			err := os.MkdirAll(whatFullPath, 0755)
 			if err != nil {
 				return err
+			}
+			if err := os.Chown(whatFullPath, *vol.UID, *vol.GID); err != nil {
+				return fmt.Errorf("could not change owner of %q: %v", whatFullPath, err)
+			}
+			mod, err := strconv.ParseUint(*vol.Mode, 8, 32)
+			if err != nil {
+				return fmt.Errorf("invalid mode %q for volume %q: %v", *vol.Mode, vol.Name, err)
+			}
+			if err := os.Chmod(whatFullPath, os.FileMode(mod)); err != nil {
+				return fmt.Errorf("could not change permissions of %q: %v", whatFullPath, err)
 			}
 		}
 
