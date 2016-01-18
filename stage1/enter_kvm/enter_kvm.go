@@ -15,20 +15,30 @@
 package main
 
 import (
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
+	"os/user"
 	"path/filepath"
-	"syscall"
+	"strings"
 
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"io/ioutil"
+
+	"github.com/coreos/rkt/Godeps/_workspace/src/golang.org/x/crypto/ssh"
+
+	"github.com/coreos/rkt/common"
 	"github.com/coreos/rkt/networking/netinfo"
 	"github.com/coreos/rkt/pkg/lock"
 )
 
 const (
-	kvmSettingsDir        = "kvm"
-	kvmPrivateKeyFilename = "ssh_kvm_key"
+	kvmSettingsDir            = "/var/lib/rkt-stage1-kvm"
+	kvmPrivateKeyFilenamePath = "/var/lib/rkt-stage1-kvm/ssh_kvm_key"
+	kvmPublicKeyFilenamePath  = "/var/lib/rkt-stage1-kvm/ssh_kvm_key.pub"
 	// TODO: overwrite below default by environment value + generate .socket unit just before pod start
 	kvmSSHPort = "122" // hardcoded value in .socket file
 )
@@ -36,11 +46,61 @@ const (
 var (
 	podPid  string
 	appName string
+	u, _    = user.Current()
 )
 
 func init() {
 	flag.StringVar(&podPid, "pid", "", "podPID")
 	flag.StringVar(&appName, "appname", "", "application to use")
+}
+
+// generateKeyPair calls ssh-keygen with private key location for key generation purpose
+func generateKeyPair() error {
+	if err := os.MkdirAll(kvmSettingsDir, 0700); err != nil {
+		return err
+	}
+	privateKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		return err
+	}
+	privateKeyRaw := x509.MarshalPKCS1PrivateKey(privateKey)
+	privateKeyBlock := pem.Block{
+		Type:    "RSA PRIVATE KEY",
+		Headers: nil,
+		Bytes:   privateKeyRaw,
+	}
+	privateKeyPem := pem.EncodeToMemory(&privateKeyBlock)
+
+	err = ioutil.WriteFile(kvmPrivateKeyFilenamePath, privateKeyPem, 0600)
+	if err != nil {
+		return fmt.Errorf("error in keygen private key. ret_val: %v", err)
+	}
+
+	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
+	marshaledPubKey := ssh.MarshalAuthorizedKey(publicKey)
+	err = ioutil.WriteFile(kvmPublicKeyFilenamePath, marshaledPubKey, 0644)
+	if err != nil {
+		return fmt.Errorf("error in keygen public key. ret_val: %v", err)
+	}
+
+	return nil
+}
+
+func ensureAuthorizedKeysExist(workDir string) error {
+	destRootfs := common.Stage1RootfsPath(workDir)
+	keyDirPath := filepath.Join(destRootfs, u.HomeDir, "/.ssh")
+	if err := os.MkdirAll(keyDirPath, 0700); err != nil {
+		return err
+	}
+	authorizedKeysFile := filepath.Join(keyDirPath, "authorized_keys")
+	if _, err := os.Stat(authorizedKeysFile); os.IsNotExist(err) {
+		buf, err := ioutil.ReadFile(kvmPublicKeyFilenamePath)
+		err = ioutil.WriteFile(authorizedKeysFile, buf, 0644)
+		if err != nil {
+			return fmt.Errorf("error during copy authorized_keys. ret_val: %v", err)
+		}
+	}
+	return nil
 }
 
 func getPodDefaultIP(workDir string) (string, error) {
@@ -75,7 +135,7 @@ func getPodDefaultIP(workDir string) (string, error) {
 	return "", fmt.Errorf("pod has no default network!")
 }
 
-func getAppexecArgs() []string {
+func getAppexecArgs() string {
 	// Documentation/devel/stage1-implementors-guide.md#arguments-1
 	// also from ../enter/enter.c
 	args := []string{
@@ -83,10 +143,20 @@ func getAppexecArgs() []string {
 		fmt.Sprintf("/opt/stage2/%s/rootfs", appName),
 		"/", // as in ../enter/enter.c - this should be app.WorkingDirectory
 		fmt.Sprintf("/rkt/env/%s", appName),
-		"0", // uid
-		"0", // gid
+		u.Uid, // uid
+		u.Gid, // gid
 	}
-	return append(args, flag.Args()...)
+	args = append(args, flag.Args()...)
+	return strings.Join(args, " ")
+}
+
+func getKeyFile(key *ssh.Signer) (err error) {
+	if _, err := os.Stat(kvmPrivateKeyFilenamePath); os.IsNotExist(err) {
+		generateKeyPair()
+	}
+	buf, err := ioutil.ReadFile(kvmPrivateKeyFilenamePath)
+	*key, err = ssh.ParsePrivateKey(buf)
+	return
 }
 
 func execSSH() error {
@@ -100,35 +170,58 @@ func execSSH() error {
 		return fmt.Errorf("cannot load networking configuration: %v", err)
 	}
 
-	// escape from running pod directory into base directory
-	if err = os.Chdir("../../.."); err != nil {
-		return fmt.Errorf("cannot change directory to rkt work directory: %v", err)
+	var key ssh.Signer
+	if err = getKeyFile(&key); err != nil {
+		return fmt.Errorf("error setting up ssh keys on host: %v", err)
 	}
 
-	// find path to ssh binary
-	sshPath, err := exec.LookPath("ssh")
+	if err := ensureAuthorizedKeysExist(workDir); err != nil {
+		return fmt.Errorf("error setting up ssh keys on pod: %v", err)
+	}
+
+	config := &ssh.ClientConfig{
+		User: u.Username,
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeys(key),
+		},
+	}
+
+	client, err := ssh.Dial("tcp", podDefaultIP+":"+kvmSSHPort, config)
 	if err != nil {
-		return fmt.Errorf("cannot find 'ssh' binary in PATH: %v", err)
+		return fmt.Errorf("Failed to dial: %v", err)
+	}
+	// escape from running pod directory into base directory
+
+	session, err := client.NewSession()
+	defer session.Close()
+	if err != nil {
+		return fmt.Errorf("Failed to create session: %v", err)
+	} else {
+		for _, e := range os.Environ() {
+			pair := strings.Split(e, "=")
+			session.Setenv(pair[0], pair[1])
+		}
+	}
+	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
+	session.Stdin = os.Stdin
+
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          0,
+		ssh.ECHOCTL:       0,
+		ssh.TTY_OP_ISPEED: 14400,
+		ssh.TTY_OP_OSPEED: 14400,
+	}
+	if err := session.RequestPty("xterm", 80, 40, modes); err != nil {
+		return fmt.Errorf("request for pseudo terminal failed: %v", err)
 	}
 
-	// prepare args for ssh invocation
-	keyFile := filepath.Join(kvmSettingsDir, kvmPrivateKeyFilename)
-	args := []string{
-		"ssh",
-		"-t",          // use tty
-		"-i", keyFile, // use keyfile
-		"-l", "root", // login as user
-		"-p", kvmSSHPort, // port to connect
-		"-o", "StrictHostKeyChecking=no", // do not check changing host keys
-		"-o", "UserKnownHostsFile=/dev/null", // do not add host key to default knownhosts file
-		"-o", "LogLevel=quiet", // do not log minor informations
-		podDefaultIP,
+	cmd := getAppexecArgs()
+	if err = session.Run(cmd); err != nil {
+		return fmt.Errorf("cannot enter through ssh: %v", err)
 	}
-	args = append(args, getAppexecArgs()...)
 
-	// this should not return in case of success
-	err = syscall.Exec(sshPath, args, os.Environ())
-	return fmt.Errorf("cannot exec to ssh: %v", err)
+	return nil
 }
 
 func main() {
@@ -139,6 +232,8 @@ func main() {
 	}
 
 	// execSSH should returns only with error
-	fmt.Fprintf(os.Stderr, "%v\n", execSSH())
-	os.Exit(2)
+	if err := execSSH(); err != nil {
+		os.Exit(2)
+	}
+	os.Exit(0)
 }
