@@ -79,6 +79,9 @@ var envTests = []struct {
 }
 
 func TestEnv(t *testing.T) {
+	if isKVM() {
+		t.Skip("kvm doesn't support this test")
+	}
 	printVarFromManifestImage := patchTestACI("rkt-inspect-print-var-from-manifest.aci", "--exec=/inspect --print-env=VAR_FROM_MANIFEST")
 	defer os.Remove(printVarFromManifestImage)
 	printVarOtherImage := patchTestACI("rkt-inspect-print-var-other.aci", "--exec=/inspect --print-env=VAR_OTHER")

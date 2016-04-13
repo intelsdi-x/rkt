@@ -43,6 +43,9 @@ var etcHostsTests = []struct {
 }
 
 func TestPrepareAppEnsureEtcHosts(t *testing.T) {
+	if isKVM() {
+		t.Skip("rkt doesn't support TestAPIServiceCgroup test yet")
+	}
 	etcHostsCreateImage := patchTestACI("rkt-inspect-etc-hosts-create.aci", "--exec=/inspect --read-file")
 	defer os.Remove(etcHostsCreateImage)
 	etcHostsExistsImage := patchTestACI("rkt-inspect-etc-hosts-exists.aci", "--exec=/inspect --read-file", "--mounts=etc,path=/etc,readOnly=false")

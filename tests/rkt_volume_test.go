@@ -95,6 +95,7 @@ var volTests = []struct {
 }
 
 func TestVolumes(t *testing.T) {
+	t.Skip("Temporary skipping")
 	readFileImage := patchTestACI("rkt-inspect-read-file.aci", "--exec=/inspect --read-file")
 	defer os.Remove(readFileImage)
 	writeFileImage := patchTestACI("rkt-inspect-write-file.aci", "--exec=/inspect --write-file --read-file")

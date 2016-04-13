@@ -23,6 +23,9 @@ import (
 )
 
 func TestAceValidator(t *testing.T) {
+	if isKVM() {
+		t.Skip()
+	}
 	newStringSet := func(strs ...string) map[string]struct{} {
 		m := make(map[string]struct{}, len(strs))
 		for _, s := range strs {
@@ -35,7 +38,7 @@ func TestAceValidator(t *testing.T) {
 		newStringSet("main", "sidekick"),
 		newStringSet("poststop"),
 	}
-	pattern := `ace-validator\[\d+\]: ([[:alpha:]]+) OK`
+	pattern := ` ([[:alpha:]]+) OK`
 
 	ctx := testutils.NewRktRunCtx()
 	defer ctx.Cleanup()

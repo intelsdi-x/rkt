@@ -286,6 +286,9 @@ func TestAPIServiceGetInfo(t *testing.T) {
 }
 
 func TestAPIServiceListInspectPods(t *testing.T) {
+	if isKVM() {
+		t.Skip("rkt doesn't support TestAPIServiceCgroup test yet")
+	}
 	ctx := testutils.NewRktRunCtx()
 	defer ctx.Cleanup()
 
@@ -428,6 +431,10 @@ func TestAPIServiceListInspectImages(t *testing.T) {
 }
 
 func TestAPIServiceCgroup(t *testing.T) {
+	if isKVM() {
+		t.Skip("rkt doesn't support TestAPIServiceCgroup test yet")
+	}
+
 	ctx := testutils.NewRktRunCtx()
 	defer ctx.Cleanup()
 

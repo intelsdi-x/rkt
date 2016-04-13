@@ -649,6 +649,9 @@ func TestNetCustomPtp(t *testing.T) {
 }
 
 func TestNetCustomMacvlan(t *testing.T) {
+	if isKVM() {
+		t.Skip("This test influence on stability of test suite")
+	}
 	iface, _, err := testutils.GetNonLoIfaceWithAddrs(netlink.FAMILY_V4)
 	if err != nil {
 		t.Fatalf("Error while getting non-lo host interface: %v\n", err)
@@ -697,6 +700,9 @@ func TestNetCustomBridge(t *testing.T) {
 }
 
 func TestNetOverride(t *testing.T) {
+	if isKVM() {
+		t.Skip("This test run on KVM flavor influences on stability of test suite")
+	}
 	ctx := testutils.NewRktRunCtx()
 	defer ctx.Cleanup()
 

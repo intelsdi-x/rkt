@@ -25,6 +25,10 @@ import (
 )
 
 func TestMountSymlink(t *testing.T) {
+	if isKVM() {
+		t.Skip("rkt doesn't support TestAPIServiceCgroup test yet")
+	}
+
 	tmpDir := createTempDirOrPanic("rkt-mount-test-")
 	defer os.RemoveAll(tmpDir)
 	mountSrcFile := filepath.Join(tmpDir, "hello")

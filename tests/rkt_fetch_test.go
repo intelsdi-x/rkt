@@ -84,6 +84,7 @@ func testFetchFromFile(t *testing.T, arg string, image string) {
 // or URL) except file:// URL will work with the default, store only
 // (--store-only) and remote only (--no-store) behaviors.
 func TestFetch(t *testing.T) {
+	t.Skip("SKIP")
 	image := "rkt-inspect-implicit-fetch.aci"
 	imagePath := patchTestACI(image, "--exec=/inspect")
 

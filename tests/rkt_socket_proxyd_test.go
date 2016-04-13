@@ -32,6 +32,9 @@ import (
 )
 
 func TestSocketProxyd(t *testing.T) {
+	if isKVM() {
+		t.Skip()
+	}
 	if !sd_util.IsRunningSystemd() {
 		t.Skip("Systemd is not running on the host.")
 	}

@@ -25,6 +25,9 @@ import (
 
 // TestExitCodeSimple is testing a few exit codes on 1 pod containing just 1 app
 func TestExitCodeSimple(t *testing.T) {
+	if isKVM() {
+		t.Skip("KVM doesn't support gathering PIDfrom parrent process yet")
+	}
 	for i := 0; i < 3; i++ {
 		t.Logf("%d\n", i)
 		imageFile := patchTestACI("rkt-inspect-exit.aci", fmt.Sprintf("--exec=/inspect --print-msg=Hello --exit-code=%d", i))
@@ -43,6 +46,9 @@ func TestExitCodeSimple(t *testing.T) {
 // TestExitCodeWithSeveralApps is testing a pod with three apps returning different
 // exit codes.
 func TestExitCodeWithSeveralApps(t *testing.T) {
+	if isKVM() {
+		t.Skip("KVM doesn't support gathering PIDfrom parrent process yet")
+	}
 	image0File := patchTestACI("rkt-inspect-exit-0.aci", "--name=hello0",
 		"--exec=/inspect --print-msg=HelloWorld --exit-code=0")
 	defer os.Remove(image0File)
