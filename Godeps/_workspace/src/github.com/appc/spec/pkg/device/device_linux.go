@@ -1,4 +1,4 @@
-// Copyright 2016 The rkt Authors
+// Copyright 2016 The appc Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build kvm
+// +build linux
 
-package main
+package device
 
-import "testing"
+// with glibc/sysdeps/unix/sysv/linux/sys/sysmacros.h as reference
 
-func TestNetPortFwdConnectivity(t *testing.T) {
-	NewNetPortFwdConnectivityTest(
-		defaultSamePortFwdCase,
-	).Execute(t)
+func Major(rdev uint64) uint {
+	return uint((rdev>>8)&0xfff) | (uint(rdev>>32) & ^uint(0xfff))
 }
 
-func TestNetCustomPtp(t *testing.T) {
-	// PTP means connection Point-To-Point. That is, connections to other pods/containers should be forbidden
-	NewNetCustomPtpTest(false)
+func Minor(rdev uint64) uint {
+	return uint(rdev&0xff) | uint(uint32(rdev>>12) & ^uint32(0xff))
+}
+
+func Makedev(maj uint, min uint) uint64 {
+	return uint64(min&0xff) | (uint64(maj&0xfff) << 8) |
+		((uint64(min) & ^uint64(0xff)) << 12) |
+		((uint64(maj) & ^uint64(0xfff)) << 32)
 }

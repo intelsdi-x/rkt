@@ -12,19 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build kvm
+// +build host coreos src kvm
 
 package main
 
-import "testing"
+import (
+	"fmt"
+	"os"
+	"testing"
 
-func TestNetPortFwdConnectivity(t *testing.T) {
-	NewNetPortFwdConnectivityTest(
-		defaultSamePortFwdCase,
-	).Execute(t)
+	"github.com/coreos/rkt/tests/testutils"
+)
+
+func TestMountNSApp(t *testing.T) {
+	image := patchTestACI("rkt-test-mount-ns-app.aci", "--exec=/inspect --check-mountns", "--capability=CAP_SYS_PTRACE")
+	defer os.Remove(image)
+
+	ctx := testutils.NewRktRunCtx()
+	defer ctx.Cleanup()
+
+	rktCmd := fmt.Sprintf("%s --insecure-options=image run %s", ctx.Cmd(), image)
+
+	expectedLine := "check-mountns: DIFFERENT"
+	runRktAndCheckOutput(t, rktCmd, expectedLine, false)
 }
 
-func TestNetCustomPtp(t *testing.T) {
-	// PTP means connection Point-To-Point. That is, connections to other pods/containers should be forbidden
-	NewNetCustomPtpTest(false)
+func TestSharedSlave(t *testing.T) {
 }
