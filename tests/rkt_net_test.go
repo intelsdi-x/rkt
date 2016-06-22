@@ -19,16 +19,19 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/coreos/rkt/networking/netinfo"
 	"github.com/coreos/rkt/tests/testutils"
 	"github.com/coreos/rkt/tests/testutils/logger"
 	"github.com/vishvananda/netlink"
-	"strings"
 )
 
 /*
@@ -901,18 +904,19 @@ func NewNetPreserveNetNameTest() testutils.Test {
 		defer os.RemoveAll(netdir)
 		defer os.Remove(ntFlannel.SubnetFile)
 
-		startList, resumeContainer := make(chan struct{}), make(chan struct{})
+		getNetInfo, resumeContainer := make(chan struct{}), make(chan struct{})
 		ga := testutils.NewGoroutineAssistant(t)
 		ga.Add(1)
 
+		podUUIDFile := filepath.Join(ctx.DataDir(), "pod_uuid")
+		defer os.Remove(podUUIDFile)
 		go func() {
-			// start dummy container with 'flannel' network
+			// start container with 'flannel' network
 			defer ga.Done()
 			testImageArgs := []string{"--exec=/inspect --print-msg=sleeping --sleep=10"}
 			testImage := patchTestACI("rkt-inspect-networking.aci", testImageArgs...)
 			defer os.Remove(testImage)
-
-			cmd := fmt.Sprintf("%s --debug --insecure-options=image run --net=%s --mds-register=false %s", ctx.Cmd(), ntFlannel.Name, testImage)
+			cmd := fmt.Sprintf("%s --debug --insecure-options=image run --uuid-file-save=%s --net=%s --mds-register=false %s", ctx.Cmd(), podUUIDFile, ntFlannel.Name, testImage)
 			child := ga.SpawnOrFail(cmd)
 			defer ga.WaitOrFail(child)
 
@@ -921,27 +925,48 @@ func NewNetPreserveNetNameTest() testutils.Test {
 				ga.Fatalf("Can't spawn container!\nError: %v\nOutput: %v", err, out)
 			}
 
-			// trigger 'rkt list'
-			startList <- struct{}{}
+			// trigger parsing net-info.json
+			getNetInfo <- struct{}{}
 
-			// wait with cleanup for 'rkt list' to finish
+			// wait with cleanup for loading netInfo's
 			<-resumeContainer
 		}()
 
-		// start 'rkt list', check if 'rkt.kubernetes.io' is in output
-		<-startList
-		cmd := fmt.Sprintf("%s list", ctx.Cmd())
-		child := spawnOrFail(t, cmd)
-		defer waitOrFail(t, child, 0)
+		<-getNetInfo
+		podUUID, err := ioutil.ReadFile(podUUIDFile)
+		if err != nil {
+			t.Fatalf("Can't read pod UUID: %v", err)
+		}
 
-		_, out, err := expectRegexTimeoutWithOutput(child, "rkt.kubernetes.io", time.Minute)
+		// read net-info.json created for pod
+		podDir := filepath.Join(ctx.DataDir(), "pods", "run", string(podUUID))
+		podDirfd, err := syscall.Open(podDir, syscall.O_RDONLY|syscall.O_DIRECTORY, 0)
+		if err != nil {
+			t.Fatalf("Can't open pod directory for reading! %v", err)
+		}
+
+		info, err := netinfo.LoadAt(podDirfd)
+		if err != nil {
+			t.Fatalf("Can't open net-info.json for reading: %v", err)
+		}
 
 		// resume rkt-inspect-networking container for cleanup
 		resumeContainer <- struct{}{}
 
-		// error indicates that either
-		if err != nil {
-			t.Fatalf("netName not set or incorrect!\nError: %v\nOutput: %v", err, out)
+		if len(info) != 2 {
+			t.Fatalf("Incorrect number of networks: %v", len(info))
+		}
+
+		found := false
+		for _, net := range info {
+			if net.NetName == ntFlannel.Name {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			t.Fatalf("Network '%s' not found!\nnetInfo[0]: %v\nnetInfo[1]: %v", ntFlannel.Name, info[0], info[1])
 		}
 
 		ga.Wait()
