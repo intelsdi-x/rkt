@@ -45,7 +45,7 @@ AS_CASE([${host_cpu}],
         [aarch64],    [RKT_ACI_ARCH=aarch64; GOARCH=arm64;],
         [armv6l],     [RKT_ACI_ARCH=armv6l;  GOARCH=arm; GOARM=6;],
         [armv7l],     [RKT_ACI_ARCH=armv7l;  GOARCH=arm; GOARM=7;],
-        [i?86 | x86], [RKT_ACI_ARCH=i386;    GOARCH=i386;],
+        [i?86 | x86], [RKT_ACI_ARCH=i386;    GOARCH=386;],
         [x86_64],     [RKT_ACI_ARCH=amd64;   GOARCH=amd64;],
         [AC_MSG_ERROR([*** unsupported host arch specified: ${host_cpu}])])
 
@@ -421,7 +421,9 @@ RKT_IF_HAS_FLAVOR([${RKT_STAGE1_FLAVORS}], [kvm],
                   AS_CASE([${RKT_STAGE1_KVM_HV}],
                           [lkvm],
                                   KVM_HV_TAG='hv_lkvm',
-                          [AC_MSG_ERROR([*** Invalid value passed to --with-stage1-kvm-hypervisor; lkvm is the only supported tool right now])]))
+                          [qemu],
+                                  KVM_HV_TAG='hv_qemu',
+                          [AC_MSG_ERROR([*** Invalid value passed to --with-stage1-kvm-hypervisor; Choose between 'qemu' and 'lkvm'. 'lkvm' is default])]))
 
 ## Options specific to coreos/kvm flavors
 
