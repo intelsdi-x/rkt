@@ -105,6 +105,7 @@ var (
 	hostname     string
 	log          *rktlog.Logger
 	diag         *rktlog.Logger
+	interpBin    string // Path to the interpreter within the stage1 rootfs, set by the linker
 )
 
 func init() {
@@ -229,6 +230,12 @@ func getArgsEnv(p *stage1commontypes.Pod, flavor string, debug bool, n *networki
 		return nil, nil, fmt.Errorf("error writing %s, %s", hostnamePath, err)
 	}
 
+	// systemd-nspawn needs /etc/machine-id to link the container's journal
+	// to the host. Since systemd-v230, /etc/machine-id is mandatory, see
+	// https://github.com/systemd/systemd/commit/e01ff70a77e781734e1e73a2238af2e9bf7967a8
+	mPath := filepath.Join(common.Stage1RootfsPath(p.Root), "etc", "machine-id")
+	machineID := strings.Replace(p.UUID.String(), "-", "", -1)
+
 	switch flavor {
 	case "kvm":
 		if privateUsers != "" {
@@ -265,6 +272,10 @@ func getArgsEnv(p *stage1commontypes.Pod, flavor string, debug bool, n *networki
 			env = append(env, "HOME=/root")
 		}
 
+		if err := linkJournal(common.Stage1RootfsPath(p.Root), machineID); err != nil {
+			return nil, nil, errwrap.Wrap(errors.New("error linking pod's journal"), err)
+		}
+
 		return args, env, nil
 
 	case "coreos":
@@ -290,6 +301,7 @@ func getArgsEnv(p *stage1commontypes.Pod, flavor string, debug bool, n *networki
 		env = append(env, "LD_LIBRARY_PATH="+filepath.Join(common.Stage1RootfsPath(p.Root), "usr/lib"))
 
 	case "src":
+		args = append(args, filepath.Join(common.Stage1RootfsPath(p.Root), interpBin))
 		args = append(args, filepath.Join(common.Stage1RootfsPath(p.Root), nspawnBin))
 		args = append(args, "--boot") // Launch systemd in the pod
 
@@ -306,6 +318,11 @@ func getArgsEnv(p *stage1commontypes.Pod, flavor string, debug bool, n *networki
 		} else {
 			args = append(args, fmt.Sprintf("--register=false"))
 		}
+
+		// use only dynamic libraries provided in the image
+		// from systemd v231 there's a new internal libsystemd-shared-v231.so
+		// which is present in /usr/lib/systemd
+		env = append(env, "LD_LIBRARY_PATH="+filepath.Join(common.Stage1RootfsPath(p.Root), "usr/lib/systemd"))
 
 	case "host":
 		hostNspawnBin, err := common.LookupPath("systemd-nspawn", os.Getenv("PATH"))
@@ -350,13 +367,8 @@ func getArgsEnv(p *stage1commontypes.Pod, flavor string, debug bool, n *networki
 		return nil, nil, fmt.Errorf("unrecognized stage1 flavor: %q", flavor)
 	}
 
-	// systemd-nspawn needs /etc/machine-id to link the container's journal
-	// to the host. Since systemd-v230, /etc/machine-id is mandatory, see
-	// https://github.com/systemd/systemd/commit/e01ff70a77e781734e1e73a2238af2e9bf7967a8
-	mPath := filepath.Join(common.Stage1RootfsPath(p.Root), "etc", "machine-id")
-	mID := strings.Replace(p.UUID.String(), "-", "", -1)
-
-	if err := ioutil.WriteFile(mPath, []byte(mID), 0644); err != nil {
+	machineIDBytes := append([]byte(machineID), '\n')
+	if err := ioutil.WriteFile(mPath, machineIDBytes, 0644); err != nil {
 		log.FatalE("error writing /etc/machine-id", err)
 	}
 

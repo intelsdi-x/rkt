@@ -1,5 +1,5 @@
 AC_PREREQ([2.63])
-AC_INIT([rkt], [1.10.0+git], [https://github.com/coreos/rkt/issues])
+AC_INIT([rkt], [1.11.0+git], [https://github.com/coreos/rkt/issues])
 
 AC_PROG_CC
 AC_PROG_CXX
@@ -45,7 +45,7 @@ AS_CASE([${host_cpu}],
         [aarch64],    [RKT_ACI_ARCH=aarch64; GOARCH=arm64;],
         [armv6l],     [RKT_ACI_ARCH=armv6l;  GOARCH=arm; GOARM=6;],
         [armv7l],     [RKT_ACI_ARCH=armv7l;  GOARCH=arm; GOARM=7;],
-        [i?86 | x86], [RKT_ACI_ARCH=i386;    GOARCH=i386;],
+        [i?86 | x86], [RKT_ACI_ARCH=i386;    GOARCH=386;],
         [x86_64],     [RKT_ACI_ARCH=amd64;   GOARCH=amd64;],
         [AC_MSG_ERROR([*** unsupported host arch specified: ${host_cpu}])])
 
@@ -573,9 +573,26 @@ AS_CASE([${RKT_ACI_ARCH}],
         dnl supported arches
         [aarch64 | amd64], [],
         dnl unsupported arches
-        [RKT_IF_HAS_FLAVOR([${RKT_STAGE1_FLAVORS}], [coreos,kvm],
-                           [AC_MSG_ERROR([*** ${RKT_ACI_ARCH}: no arch support for stage1 flavors {coreos,kvm}])],
+        [RKT_IF_HAS_FLAVOR([${RKT_STAGE1_FLAVORS}], [coreos,kvm,src],
+                           [AC_MSG_ERROR([*** ${RKT_ACI_ARCH}: no arch support for stage1 flavors {coreos,kvm,src}])],
                            [AC_MSG_WARN([* ${RKT_ACI_ARCH}: unsupported arch])])])
+
+# Set the path to the interpreter binary for coreos flavor.
+RKT_IF_HAS_FLAVOR([${RKT_STAGE1_FLAVORS}], [coreos],
+                  [AS_CASE([${RKT_ACI_ARCH}],
+                           [aarch64],
+                                    [RKT_STAGE1_INTERPRETER="/usr/lib/ld-linux-aarch64.so.1"],
+                           [amd64],
+                                    [RKT_STAGE1_INTERPRETER="/usr/lib/ld-linux-x86-64.so.2"])])
+
+# Set the path to the interpreter binary for src flavor.
+RKT_IF_HAS_FLAVOR([${RKT_STAGE1_FLAVORS}], [src],
+                  [AS_CASE([${RKT_ACI_ARCH}],
+                           [aarch64],
+                                    [RKT_STAGE1_INTERPRETER="/lib64/ld-linux-aarch64.so.1"],
+                           [amd64],
+                                    [RKT_STAGE1_INTERPRETER="/lib64/ld-linux-x86-64.so.2"])])
+
 
 # cross_compiling is a standard autoconf variable.  See the autoconf manual for
 # details.
@@ -709,6 +726,7 @@ RKT_STAGE1_DEFAULT_VERSION_LDFLAGS="-X 'main.buildDefaultStage1Version=${RKT_STA
 RKT_STAGE1_DEFAULT_LOCATION_LDFLAGS="-X 'main.buildDefaultStage1ImageLoc=${RKT_STAGE1_DEFAULT_LOCATION}'"
 RKT_STAGE1_DEFAULT_IMAGE_FILENAME_LDFLAGS="-X 'main.buildDefaultStage1ImageInRktDir=${RKT_STAGE1_DEFAULT_IMAGE_FILENAME_IN_RKT_DIRECTORY}'"
 RKT_STAGE1_DEFAULT_IMAGES_DIRECTORY_LDFLAGS="-X 'main.buildDefaultStage1ImagesDir=${RKT_STAGE1_DEFAULT_IMAGES_DIR}'"
+RKT_STAGE1_INTERPRETER_LDFLAGS="-X 'main.interpBin=${RKT_STAGE1_INTERPRETER}'"
 RKT_VERSION_LDFLAGS="-X 'github.com/coreos/rkt/version.Version=${RKT_VERSION}'"
 RKT_FEATURES_LDFLAGS="-X 'main.rktFeatures=${RKT_FEATURES}'"
 
@@ -736,6 +754,7 @@ AC_SUBST(RKT_LOCAL_COREOS_PXE_IMAGE_PATH)
 AC_SUBST(RKT_LOCAL_COREOS_PXE_IMAGE_SYSTEMD_VER)
 
 AC_SUBST(RKT_STAGE1_COREOS_BOARD)
+AC_SUBST(RKT_STAGE1_INTERPRETER)
 
 AC_SUBST(RKT_RUN_FUNCTIONAL_TESTS)
 
@@ -748,6 +767,7 @@ AC_SUBST(RKT_STAGE1_DEFAULT_VERSION_LDFLAGS)
 AC_SUBST(RKT_STAGE1_DEFAULT_LOCATION_LDFLAGS)
 AC_SUBST(RKT_STAGE1_DEFAULT_IMAGE_FILENAME_LDFLAGS)
 AC_SUBST(RKT_STAGE1_DEFAULT_IMAGES_DIRECTORY_LDFLAGS)
+AC_SUBST(RKT_STAGE1_INTERPRETER_LDFLAGS)
 AC_SUBST(RKT_VERSION_LDFLAGS)
 AC_SUBST(RKT_FEATURES_LDFLAGS)
 
@@ -808,6 +828,12 @@ RKT_IF_HAS_FLAVOR([${RKT_STAGE1_FLAVORS}], [kvm],
         kvm flavor specific build parameters
 
         hypervisor:                             '${RKT_STAGE1_KVM_HV}'])])
+
+RKT_IF_HAS_FLAVOR([${RKT_STAGE1_FLAVORS}], [coreos,src],
+                  [AC_MSG_RESULT([
+        coreos flavor specific build parameters
+
+        interpreter:                            '${RKT_STAGE1_INTERPRETER}'])])
 
 
 AC_MSG_RESULT([

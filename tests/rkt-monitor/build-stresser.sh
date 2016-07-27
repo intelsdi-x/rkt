@@ -22,14 +22,17 @@ acbuildEnd() {
     acbuild --debug end && exit $EXIT
 }
 
+RKT_VERSION=`rkt=$(cat ./configure.ac | grep AC_INIT | awk '{print $2}') && echo $(expr match "$rkt" '\[\(.*\)\]')`
+
 acbuild --debug begin
 
 trap acbuildEnd EXIT
 
 acbuild --debug set-name appc.io/rkt-"${1}"-stresser
 
-acbuild --debug copy build-rkt-1.10.0+git/target/bin/"${1}"-stresser /worker
+acbuild --debug copy build-rkt-$RKT_VERSION/target/bin/"${1}"-stresser /worker
 
 acbuild --debug set-exec -- /worker
 
 acbuild --debug write --overwrite "${1}"-stresser.aci
+

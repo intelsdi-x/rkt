@@ -26,7 +26,7 @@ import (
 	"github.com/coreos/rkt/rkt/config"
 	rktflag "github.com/coreos/rkt/rkt/flag"
 	"github.com/coreos/rkt/rkt/pubkey"
-	"github.com/coreos/rkt/store"
+	"github.com/coreos/rkt/store/imagestore"
 	"github.com/hashicorp/errwrap"
 
 	"github.com/appc/spec/discovery"
@@ -36,7 +36,7 @@ import (
 // nameFetcher is used to download images via discovery
 type nameFetcher struct {
 	InsecureFlags      *rktflag.SecFlags
-	S                  *store.Store
+	S                  *imagestore.Store
 	Ks                 *keystore.Keystore
 	Debug              bool
 	Headers            map[string]config.Headerer
@@ -108,12 +108,15 @@ func (f *nameFetcher) fetchImageFromSingleEndpoint(app *discovery.App, aciURL st
 	}
 	defer aciFile.Close()
 
-	key, err := f.S.WriteACI(aciFile, latest)
+	key, err := f.S.WriteACI(aciFile, imagestore.ACIFetchInfo{
+		Latest:          latest,
+		InsecureOptions: int64(f.InsecureFlags.Value()),
+	})
 	if err != nil {
 		return "", err
 	}
 
-	rem := store.NewRemote(aciURL, a.Location)
+	rem := imagestore.NewRemote(aciURL, a.Location)
 	rem.BlobKey = key
 	rem.DownloadTime = time.Now()
 	rem.ETag = cd.ETag
