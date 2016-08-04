@@ -680,10 +680,10 @@ func (n *Networking) kvmTeardown() {
 // (behavior required by stage1/init/kvm package and its kernel parameters configuration)
 
 func (an activeNet) HostIP() net.IP {
-	return an.runtime.HostIP
+	return an.runtime.IP4.Gateway
 }
 func (an activeNet) GuestIP() net.IP {
-	return an.runtime.IP
+	return an.runtime.IP4.IP.IP
 }
 func (an activeNet) IfName() string {
 	if an.conf.Type == "macvlan" {
@@ -698,8 +698,8 @@ func (an activeNet) IfName() string {
 	}
 	return an.runtime.IfName
 }
-func (an activeNet) Mask() net.IP {
-	return an.runtime.Mask
+func (an activeNet) Mask() net.IPMask {
+	return an.runtime.IP4.IP.Mask
 }
 func (an activeNet) Name() string {
 	return an.conf.Name
@@ -712,6 +712,10 @@ func (an activeNet) Gateway() net.IP {
 }
 func (an activeNet) Routes() []cnitypes.Route {
 	return an.runtime.IP4.Routes
+}
+
+func (an activeNet) IPC() *cnitypes.IPConfig {
+	return an.runtime.IP4
 }
 
 // GetActiveNetworks returns activeNets to be used as NetDescriptors

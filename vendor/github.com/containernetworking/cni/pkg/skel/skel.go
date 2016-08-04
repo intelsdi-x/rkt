@@ -1,4 +1,4 @@
-// Copyright 2014 CNI authors
+// Copyright 2014-2016 CNI authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@ package skel
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/containernetworking/cni/pkg/types"
 )
@@ -28,20 +30,25 @@ import (
 // CmdArgs captures all the arguments passed in to the plugin
 // via both env vars and stdin
 type CmdArgs struct {
-	ContainerID string
-	Netns       string
-	IfName      string
-	Args        string
-	Path        string
-	StdinData   []byte
+	ContainerID   string
+	Netns         string
+	IfName        string
+	Args          string
+	Path          string
+	UsesTapDevice bool
+	StdinData     []byte
+}
+
+type dispatcher struct {
+	Getenv func(string) string
+	Stdin  io.Reader
+	Stderr io.Writer
 }
 
 type reqForCmdEntry map[string]bool
 
-// PluginMain is the "main" for a plugin. It accepts
-// two callback functions for add and del commands.
-func PluginMain(cmdAdd, cmdDel func(_ *CmdArgs) error) {
-	var cmd, contID, netns, ifName, args, path string
+func (t *dispatcher) getCmdArgsFromEnv() (string, *CmdArgs, error) {
+	var cmd, contID, netns, ifName, args, path, usesTapDevice string
 
 	vars := []struct {
 		name      string
@@ -96,33 +103,69 @@ func PluginMain(cmdAdd, cmdDel func(_ *CmdArgs) error) {
 				"DEL": true,
 			},
 		},
+		{
+			"CNI_USE_TAP",
+			&usesTapDevice,
+			reqForCmdEntry{
+				"ADD": false,
+				"DEL": false,
+			},
+		},
 	}
 
 	argsMissing := false
 	for _, v := range vars {
-		*v.val = os.Getenv(v.name)
-		if v.reqForCmd[cmd] && *v.val == "" {
-			log.Printf("%v env variable missing", v.name)
-			argsMissing = true
+		*v.val = t.Getenv(v.name)
+		if *v.val == "" {
+			if v.reqForCmd[cmd] || v.name == "CNI_COMMAND" {
+				fmt.Fprintf(t.Stderr, "%v env variable missing\n", v.name)
+				argsMissing = true
+			}
 		}
 	}
 
 	if argsMissing {
-		dieMsg("required env variables missing")
+		return "", nil, fmt.Errorf("required env variables missing")
 	}
 
-	stdinData, err := ioutil.ReadAll(os.Stdin)
+	stdinData, err := ioutil.ReadAll(t.Stdin)
 	if err != nil {
-		dieMsg("error reading from stdin: %v", err)
+		return "", nil, fmt.Errorf("error reading from stdin: %v", err)
+	}
+
+	var useTap bool
+	if usesTapDevice == "" {
+		useTap = false
+	} else {
+		useTap, err = strconv.ParseBool(usesTapDevice)
+		if err != nil {
+			return "", nil, fmt.Errorf("CNI_USE_TAP should only contain 'true' or 'false'")
+		}
 	}
 
 	cmdArgs := &CmdArgs{
-		ContainerID: contID,
-		Netns:       netns,
-		IfName:      ifName,
-		Args:        args,
-		Path:        path,
-		StdinData:   stdinData,
+		ContainerID:   contID,
+		Netns:         netns,
+		IfName:        ifName,
+		Args:          args,
+		Path:          path,
+		UsesTapDevice: useTap,
+		StdinData:     stdinData,
+	}
+	return cmd, cmdArgs, nil
+}
+
+func createTypedError(f string, args ...interface{}) *types.Error {
+	return &types.Error{
+		Code: 100,
+		Msg:  fmt.Sprintf(f, args...),
+	}
+}
+
+func (t *dispatcher) pluginMain(cmdAdd, cmdDel func(_ *CmdArgs) error) *types.Error {
+	cmd, cmdArgs, err := t.getCmdArgsFromEnv()
+	if err != nil {
+		return createTypedError(err.Error())
 	}
 
 	switch cmd {
@@ -133,24 +176,32 @@ func PluginMain(cmdAdd, cmdDel func(_ *CmdArgs) error) {
 		err = cmdDel(cmdArgs)
 
 	default:
-		dieMsg("unknown CNI_COMMAND: %v", cmd)
+		return createTypedError("unknown CNI_COMMAND: %v", cmd)
 	}
 
 	if err != nil {
 		if e, ok := err.(*types.Error); ok {
 			// don't wrap Error in Error
-			dieErr(e)
+			return e
 		}
-		dieMsg(err.Error())
+		return createTypedError(err.Error())
 	}
+	return nil
 }
 
-func dieMsg(f string, args ...interface{}) {
-	e := &types.Error{
-		Code: 100,
-		Msg:  fmt.Sprintf(f, args...),
+// PluginMain is the "main" for a plugin. It accepts
+// two callback functions for add and del commands.
+func PluginMain(cmdAdd, cmdDel func(_ *CmdArgs) error) {
+	caller := dispatcher{
+		Getenv: os.Getenv,
+		Stdin:  os.Stdin,
+		Stderr: os.Stderr,
 	}
-	dieErr(e)
+
+	err := caller.pluginMain(cmdAdd, cmdDel)
+	if err != nil {
+		dieErr(err)
+	}
 }
 
 func dieErr(e *types.Error) {

@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -50,23 +51,27 @@ func pluginErr(err error, output []byte) error {
 	return err
 }
 
-func (e *podEnv) netPluginAdd(n *activeNet, netns string) (ip, hostIP net.IP, err error) {
+func (e *podEnv) netPluginAdd(n *activeNet, netns string) (ip, hostIP net.IP, Ifname string, err error) {
 	output, err := e.execNetPlugin("ADD", n, netns)
 	if err != nil {
-		return nil, nil, pluginErr(err, output)
+		return nil, nil, "", pluginErr(err, output)
 	}
+
+	fmt.Printf("netPluginAdd output: %v", string(output[:]))
 
 	pr := cnitypes.Result{}
 	if err = json.Unmarshal(output, &pr); err != nil {
 		err = errwrap.Wrap(fmt.Errorf("parsing %q", string(output)), err)
-		return nil, nil, errwrap.Wrap(fmt.Errorf("error parsing %q result", n.conf.Name), err)
+		return nil, nil, "", errwrap.Wrap(fmt.Errorf("error parsing %q result", n.conf.Name), err)
 	}
 
 	if pr.IP4 == nil {
-		return nil, nil, nil
+		return nil, nil, "", nil
 	}
 
-	return pr.IP4.IP.IP, pr.IP4.Gateway, nil
+	n.runtime.IP4 = pr.IP4
+
+	return pr.IP4.IP.IP, pr.IP4.Gateway, pr.IP4.Iface, nil
 }
 
 func (e *podEnv) netPluginDel(n *activeNet, netns string) error {
@@ -122,10 +127,17 @@ func (e *podEnv) execNetPlugin(cmd string, n *activeNet, netns string) ([]byte, 
 		{"CNI_ARGS", n.runtime.Args},
 		{"CNI_IFNAME", n.runtime.IfName},
 		{"CNI_PATH", strings.Join(e.pluginPaths(), ":")},
+		{"CNI_USE_TAP", strconv.FormatBool(e.useTap)},
 	}
+
+	//	if e.useTap {
+	//		vars = append(vars, [2]string{"CNI_USE_TAP", "true"})
+	//	}
 
 	stdin := bytes.NewBuffer(n.confBytes)
 	stdout := &bytes.Buffer{}
+
+	fmt.Printf("Net plugin path: %v\n", n.runtime.PluginPath)
 
 	c := exec.Cmd{
 		Path:   n.runtime.PluginPath,

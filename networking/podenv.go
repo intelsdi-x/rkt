@@ -52,6 +52,7 @@ type podEnv struct {
 	netsLoadList common.NetList
 	localConfig  string
 	podNS        ns.NetNS
+	useTap       bool
 }
 
 type activeNet struct {
@@ -175,7 +176,7 @@ func (e *podEnv) setupNets(nets []activeNet) error {
 			return errwrap.Wrap(fmt.Errorf("error copying %q to %q", n.runtime.ConfPath, e.netDir()), err)
 		}
 
-		n.runtime.IP, n.runtime.HostIP, err = e.netPluginAdd(&n, e.podNS.Path())
+		n.runtime.IP, n.runtime.HostIP, n.runtime.IfName, err = e.netPluginAdd(&n, e.podNS.Path())
 		if err != nil {
 			return errwrap.Wrap(fmt.Errorf("error adding network %q", n.conf.Name), err)
 		}

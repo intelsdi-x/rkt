@@ -22,7 +22,7 @@ import (
 	"net"
 	"path/filepath"
 
-	"github.com/containernetworking/cni/pkg/types"
+	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/coreos/go-systemd/unit"
 	"github.com/coreos/rkt/networking"
 	"github.com/hashicorp/errwrap"
@@ -41,12 +41,13 @@ func GetNetworkDescriptions(n *networking.Networking) []netDescriber {
 // netDescriber is something that describes network configuration
 type netDescriber interface {
 	GuestIP() net.IP
-	Mask() net.IP
+	Mask() net.IPMask
 	IfName() string
 	IPMasq() bool
 	Name() string
 	Gateway() net.IP
-	Routes() []types.Route
+	Routes() []cnitypes.Route
+	IPC() *cnitypes.IPConfig
 }
 
 // GetKVMNetArgs returns additional arguments that need to be passed
@@ -109,7 +110,7 @@ func GenerateNetworkInterfaceUnits(unitsPath string, netDescriptions []netDescri
 		ifName := fmt.Sprintf(networking.IfNamePattern, i)
 		netAddress := net.IPNet{
 			IP:   netDescription.GuestIP(),
-			Mask: net.IPMask(netDescription.Mask()),
+			Mask: netDescription.Mask(),
 		}
 
 		address := netAddress.String()
@@ -130,6 +131,8 @@ func GenerateNetworkInterfaceUnits(unitsPath string, netDescriptions []netDescri
 			unit.NewUnitOption("Service", "ExecStart", addAddressCommand(address, ifName)),
 			unit.NewUnitOption("Install", "RequiredBy", "default.target"),
 		}
+
+		fmt.Printf("init/kvm/network netDescriptions: %v\n", netDescription.IPC())
 
 		for _, route := range netDescription.Routes() {
 			gw := route.GW

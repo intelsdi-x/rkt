@@ -66,8 +66,10 @@ func Setup(podRoot string, podID types.UUID, fps []ForwardedPort, netList common
 
 	stderr = log.New(os.Stderr, "networking", debug)
 
+	tap := false
 	if flavor == "kvm" {
-		return kvmSetup(podRoot, podID, fps, netList, localConfig)
+		//return kvmSetup(podRoot, podID, fps, netList, localConfig)
+		tap = true
 	}
 
 	// Create namespace for Pod and write path to a file
@@ -78,6 +80,7 @@ func Setup(podRoot string, podID types.UUID, fps []ForwardedPort, netList common
 
 	// TODO(jonboulle): currently podRoot is _always_ ".", and behaviour in other
 	// circumstances is untested. This should be cleaned up.
+
 	n := Networking{
 		podEnv: podEnv{
 			podRoot:      podRoot,
@@ -85,6 +88,7 @@ func Setup(podRoot string, podID types.UUID, fps []ForwardedPort, netList common
 			netsLoadList: netList,
 			localConfig:  localConfig,
 			podNS:        podNS,
+			useTap:       tap,
 		},
 	}
 
@@ -112,12 +116,14 @@ func Setup(podRoot string, podID types.UUID, fps []ForwardedPort, netList common
 	}
 
 	// Switch to the podNS
-	if err := podNS.Set(); err != nil {
-		return nil, err
-	}
+	if !tap {
+		if err := podNS.Set(); err != nil {
+			return nil, err
+		}
 
-	if err = loUp(); err != nil {
-		return nil, err
+		if err = loUp(); err != nil {
+			return nil, err
+		}
 	}
 
 	return &n, nil
