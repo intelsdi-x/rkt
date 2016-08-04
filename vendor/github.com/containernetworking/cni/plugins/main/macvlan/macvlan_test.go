@@ -15,11 +15,8 @@
 package main
 
 import (
-	"fmt"
-
+	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ns"
-	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/testutils"
 	"github.com/containernetworking/cni/pkg/types"
 
 	"github.com/vishvananda/netlink"
@@ -28,9 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const MASTER_NAME = "eth0"
-
-var _ = Describe("macvlan Operations", func() {
+var _ = Describe("macvtap Operations", func() {
 	var originalNS ns.NetNS
 
 	BeforeEach(func() {
@@ -60,7 +55,7 @@ var _ = Describe("macvlan Operations", func() {
 		Expect(originalNS.Close()).To(Succeed())
 	})
 
-	It("creates an macvlan link in a non-default namespace", func() {
+	It("creates an macvtap link in a network namespace", func() {
 		conf := &types.MacVlanNetConf{
 			NetConf: types.NetConf{
 				Name: "testConfig",
@@ -71,96 +66,26 @@ var _ = Describe("macvlan Operations", func() {
 			MTU:    1500,
 		}
 
-		targetNs, err := ns.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
+		var tapIface netlink.Link
+		var err error
 
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			err = createMacvlan(conf, "foobar0", targetNs)
+			tapIface, err = ip.SetupMacVtap(*conf)
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Make sure macvlan link exists in the target namespace
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			link, err := netlink.LinkByName("foobar0")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal("foobar0"))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("configures and deconfigures a macvlan link with ADD/DEL", func() {
-		const IFNAME = "macvl0"
-
-		conf := fmt.Sprintf(`{
-    "name": "mynet",
-    "type": "macvlan",
-    "master": "%s",
-    "ipam": {
-        "type": "host-local",
-        "subnet": "10.1.2.0/24"
-    }
-}`, MASTER_NAME)
-
-		targetNs, err := ns.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
-
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      IFNAME,
-			StdinData:   []byte(conf),
-		}
-
-		// Make sure macvlan link exists in the target namespace
+		// Make sure macvtap link exists in the namespace
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			_, err := testutils.CmdAddWithResult(targetNs.Path(), IFNAME, func() error {
-				return cmdAdd(args)
-			})
+			tapIfaceName := tapIface.Attrs().Name
+			link, err := netlink.LinkByName(tapIfaceName)
 			Expect(err).NotTo(HaveOccurred())
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make sure macvlan link exists in the target namespace
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal(IFNAME))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			err := testutils.CmdDelWithResult(targetNs.Path(), IFNAME, func() error {
-				return cmdDel(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make sure macvlan link has been deleted
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).To(HaveOccurred())
-			Expect(link).To(BeNil())
+			Expect(link.Attrs().Name).To(Equal(tapIfaceName))
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
