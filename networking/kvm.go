@@ -23,18 +23,6 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-const (
-	defaultBrName     = "kvm-cni0"
-	defaultSubnetFile = "/run/flannel/subnet.env"
-	defaultMTU        = 1500
-)
-
-type BridgeNetConf struct {
-	NetConf
-	BrName string `json:"bridge"`
-	IsGw   bool   `json:"isGateway"`
-}
-
 // Following methods implements behavior of netDescriber by activeNet
 // (behavior required by stage1/init/kvm package and its kernel parameters configuration)
 
