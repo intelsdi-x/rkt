@@ -15,13 +15,52 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 )
 
 func main() {
-	fmt.Print("APP-STARTED!\n")
+	appendLine("TIME " + time.Now().Format(time.RFC3339Nano) + "\n")
+	hostname := getHostname()
+	appendLine("ID " + hostname + "\n")
 	for {
 		fmt.Printf("%s\n", time.Now().Format("Mon Jan 2 15:04:05 -0700 MST 2006"))
 	}
+}
+
+func appendLine(line string) {
+	f, err := os.OpenFile("/tmp/benchmarking_info", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0777)
+	if err != nil {
+		panic(err)
+	}
+
+	defer f.Close()
+
+	if _, err = f.WriteString(line); err != nil {
+		panic(err)
+	}
+}
+
+func getHostname() string {
+	file, err := os.Open("/etc/hostname")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "rkt-") {
+			sl := strings.SplitAfter(scanner.Text(), "rkt-")
+			return sl[len(sl)-1]
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
+	return "ERROR"
 }
