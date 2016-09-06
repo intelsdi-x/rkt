@@ -33,6 +33,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type BenchmarkStatus struct {
+	containerId string
+	startTime   string
+}
+
 type ProcessStatus struct {
 	Pid  int32
 	Name string  // Name of process
@@ -156,7 +161,11 @@ func runRktMonitor(cmd *cobra.Command, args []string) {
 		} else {
 			argv = append(argv, args[0], "--insecure-options=image")
 		}
+
 		argv = append(argv, "--net=default-restricted")
+		argv = append(argv, "--volume=host-tmp,kind=host,source=/tmp,readOnly=false")
+		argv = append(argv, "--mount")
+		argv = append(argv, "volume=host-tmp,target=/tmp")
 
 		execCmd = exec.Command(rktBinary, argv...)
 
@@ -170,37 +179,53 @@ func runRktMonitor(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 
-		execCmdScanner := bufio.NewScanner(cmdReader)
+		_ = bufio.NewScanner(cmdReader)
 
-		startConfirmation := make(chan string, 1)
+		startConfirmation := make(chan BenchmarkStatus, 1)
 		go func() {
-			var containerId string
-			for execCmdScanner.Scan() {
-				if flagShowOutput {
-					fmt.Println(execCmdScanner.Text())
-				}
-				if strings.Contains(execCmdScanner.Text(), "APP-STARTED!") {
-					startConfirmation <- containerId
-				} else if strings.Contains(execCmdScanner.Text(), "Set hostname to") {
-					sl := strings.SplitAfter(execCmdScanner.Text(), "<rkt-")
-					containerId = sl[len(sl)-1]
-					containerId = containerId[:len(containerId)-2]
+			status := new(BenchmarkStatus)
+			for {
+				if fileExist("/tmp/benchmarking_info") {
+					file, err := os.Open("/tmp/benchmarking_info")
+					if err != nil {
+						panic(err)
+					}
+
+					scanner := bufio.NewScanner(file)
+					if err := scanner.Err(); err != nil {
+						panic(err)
+					}
+					for scanner.Scan() {
+						if strings.Contains(scanner.Text(), "TIME") {
+							sl := strings.SplitAfter(scanner.Text(), " ")
+							status.startTime = sl[len(sl)-1]
+						} else if strings.Contains(scanner.Text(), "ID") {
+							sl := strings.SplitAfter(scanner.Text(), " ")
+							status.containerId = sl[len(sl)-1]
+						}
+					}
+					file.Close()
+					if status.containerId != "" {
+						startConfirmation <- *status
+						return
+					}
 				}
 			}
 		}()
 		containerStarting = time.Now()
 		err = execCmd.Start()
-		containerId = <-startConfirmation
-		containerStarted = time.Now() //here we are sure - container is running (issue: #3019)
-		close(startConfirmation)
-
-		if flagShowOutput {
-			execCmd.Stdout = os.Stdout
-		}
-
 		if err != nil {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)
+		}
+		for res := range startConfirmation {
+			containerId = res.containerId
+			containerStarted, _ = time.Parse(time.RFC3339Nano, res.startTime) //here we are sure - container is running (issue: #3019)
+			break
+		}
+
+		if flagShowOutput {
+			execCmd.Stdout = os.Stdout
 		}
 
 		usages := make(map[int32][]*ProcessStatus)
@@ -232,14 +257,17 @@ func runRktMonitor(cmd *cobra.Command, args []string) {
 			}
 
 			time.Sleep(time.Second)
+			if fileExist("/tmp/benchmarking_info") {
+				os.Remove("/tmp/benchmarking_info")
+			}
 		}
 
 		loadAvg, err = load.Avg()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "measure load avg failed: %v\n", err)
 		}
-
-		stopCmd = exec.Command(rktBinary, "stop", containerId)
+		
+		stopCmd = exec.Command(rktBinary, "stop", "--force=true", containerId)
 
 		cmdStopReader, err := stopCmd.StdoutPipe()
 		if err != nil {
@@ -260,16 +288,15 @@ func runRktMonitor(cmd *cobra.Command, args []string) {
 			stopConfirmation <- false
 		}()
 		err = stopCmd.Start()
+		if err != nil {
+			fmt.Printf("%v\n", err)
+			os.Exit(1)
+		}
 		if !<-stopConfirmation {
 			fmt.Println("WARNING: There was a problem stopping the container! (Container already stopped?)")
 		}
 		containerStopped = time.Now()
 		close(stopConfirmation)
-
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			os.Exit(1)
-		}
 
 		gcCmd = exec.Command(rktBinary, "gc", "--grace-period=0")
 		gcCmd.Start()
