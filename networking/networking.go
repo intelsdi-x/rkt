@@ -68,7 +68,6 @@ func Setup(podRoot string, podID types.UUID, fps []ForwardedPort, netList common
 
 	tap := false
 	if flavor == "kvm" {
-		//return kvmSetup(podRoot, podID, fps, netList, localConfig)
 		tap = true
 	}
 
@@ -269,11 +268,6 @@ func (n *Networking) Teardown(flavor string, debug bool) {
 
 	// Teardown everything in reverse order of setup.
 	// This should be idempotent -- be tolerant of missing stuff
-
-	if flavor == "kvm" {
-		n.kvmTeardown()
-		return
-	}
 
 	if err := n.unforwardPorts(); err != nil {
 		stderr.PrintE("error removing forwarded ports", err)
