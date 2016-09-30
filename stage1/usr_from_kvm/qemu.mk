@@ -13,7 +13,7 @@ QEMU_CONFIGURATION_OPTS := --disable-bsd-user --disable-docs --disable-guest-age
     --disable-sdl --disable-gtk --disable-vte --disable-curses --disable-cocoa --disable-brlapi --disable-vnc \
     --disable-seccomp --disable-curl --disable-bluez --disable-cap-ng --disable-rbd --disable-libiscsi \
     --disable-libnfs --disable-smartcard --disable-libusb --disable-glusterfs --disable-archipelago --disable-vhdx \
-    --disable-tcmalloc --disable-jemalloc --disable-debug-info --static --enable-virtfs --target-list=x86_64-softmmu \
+    --disable-tcmalloc --disable-jemalloc --disable-debug-info --enable-virtfs --target-list=x86_64-softmmu \
     --python=/usr/bin/python2 --disable-werror
 QEMU_ACI_BINARY := $(HV_ACIROOTFSDIR)/qemu
 

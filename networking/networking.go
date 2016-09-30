@@ -47,6 +47,10 @@ type Networking struct {
 	nets []activeNet
 }
 
+func (n *Networking) GetPodNS() ns.NetNS {
+	return n.podNS
+}
+
 // NetConf local struct extends cnitypes.NetConf with information about masquerading
 // similar to CNI plugins
 type NetConf struct {
@@ -68,9 +72,9 @@ func Setup(podRoot string, podID types.UUID, fps []commonnet.ForwardedPort, netL
 	stderr = log.New(os.Stderr, "networking", debug)
 	debuglog = debug
 
-	if flavor == "kvm" {
-		return kvmSetup(podRoot, podID, fps, netList, localConfig, noDNS)
-	}
+	//if flavor == "kvm" {
+	//	return kvmSetup(podRoot, podID, fps, netList, localConfig)
+	//}
 
 	// TODO(jonboulle): currently podRoot is _always_ ".", and behaviour in other
 	// circumstances is untested. This should be cleaned up.
@@ -121,8 +125,10 @@ func Setup(podRoot string, podID types.UUID, fps []commonnet.ForwardedPort, netL
 		return nil, err
 	}
 
-	if err = loUp(); err != nil {
-		return nil, err
+	if flavor != "kvm" {
+		if err = loUp(); err != nil {
+			return nil, err
+		}
 	}
 
 	return &n, nil
