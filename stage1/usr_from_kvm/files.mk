@@ -12,12 +12,15 @@ UFKF_ACI_FILES := \
 	$(S1_RF_ACIROOTFSDIR)/etc/group \
 	$(S1_RF_ACIROOTFSDIR)/etc/ssh/sshd_config \
 	$(S1_RF_ACIROOTFSDIR)/usr/lib64/systemd/system/sshd-prep.service \
-	$(S1_RF_ACIROOTFSDIR)/usr/lib64/systemd/system/sshd@.service
+	$(S1_RF_ACIROOTFSDIR)/usr/lib64/systemd/system/sshd@.service \
+	$(S1_RF_ACIROOTFSDIR)/usr/bin/busybox \
+	$(S1_RF_ACIROOTFSDIR)/etc/qemu-ifup.sh \
+	$(S1_RF_ACIROOTFSDIR)/etc/qemu-ifdown.sh
 
 UFKF_SRC_FILES := $(addprefix $(UFKF_DIR)/,$(notdir $(UFKF_ACI_FILES)))
 
 S1_RF_SECONDARY_STAMPS += $(UFKF_STAMP)
-S1_RF_INSTALL_FILES += $(call install-file-triplets,$(UFKF_SRC_FILES),$(UFKF_ACI_FILES),0644)
+S1_RF_INSTALL_FILES += $(call install-file-triplets,$(UFKF_SRC_FILES),$(UFKF_ACI_FILES),0744)
 S1_RF_INSTALL_DIRS += \
 	$(addsuffix :0755,$(UFKF_DIR_CHAIN) $(sort $(call to-dir,$(UFKF_ACI_FILES))))
 

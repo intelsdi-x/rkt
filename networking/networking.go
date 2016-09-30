@@ -49,6 +49,10 @@ type Networking struct {
 	nets []activeNet
 }
 
+func (n *Networking) GetPodNS() ns.NetNS {
+	return n.podNS
+}
+
 // NetConf local struct extends cnitypes.NetConf with information about masquerading
 // similar to CNI plugins
 type NetConf struct {
@@ -66,9 +70,9 @@ func Setup(podRoot string, podID types.UUID, fps []ForwardedPort, netList common
 
 	stderr = log.New(os.Stderr, "networking", debug)
 
-	if flavor == "kvm" {
-		return kvmSetup(podRoot, podID, fps, netList, localConfig, noDNS)
-	}
+	//if flavor == "kvm" {
+	//	return kvmSetup(podRoot, podID, fps, netList, localConfig)
+	//}
 
 	// Create namespace for Pod and write path to a file
 	podNS, err := ns.NewNS()
@@ -116,8 +120,10 @@ func Setup(podRoot string, podID types.UUID, fps []ForwardedPort, netList common
 		return nil, err
 	}
 
-	if err = loUp(); err != nil {
-		return nil, err
+	if flavor != "kvm" {
+		if err = loUp(); err != nil {
+			return nil, err
+		}
 	}
 
 	return &n, nil
