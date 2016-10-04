@@ -70,7 +70,7 @@ func StartCmd(wdPath, name, kernelPath string, nds []kvm.NetDescriber, cpu, mem 
 func kvmNetArgs(nds []kvm.NetDescriber) []string {
 	var qemuArgs []string
 
-	for i, _ := range nds {
+	for i := range nds {
 		qemuArgs = append(qemuArgs, []string{"-net", "nic,model=virtio"}...)
 		qemuNic := fmt.Sprintf("tap,ifname=tap%d,script=stage1/rootfs/etc/qemu-ifup.sh,downscript=stage1/rootfs/etc/qemu-ifdown.sh,vhost=on", i)
 		qemuArgs = append(qemuArgs, []string{"-net", qemuNic}...)
