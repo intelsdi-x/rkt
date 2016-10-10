@@ -682,7 +682,7 @@ func (n *Networking) teardownKvmNets() {
 		// remove masquerading if it was prepared
 		if an.conf.IPMasq {
 			chain := cniutils.FormatChainName(an.conf.Name, n.podID.String())
-			comment := cniutils.FormatChainName(an.conf.Name, n.podID.String())
+			comment := cniutils.FormatComment(an.conf.Name, n.podID.String())
 			err := ip.TeardownIPMasq(&net.IPNet{
 				IP:   an.runtime.IP,
 				Mask: net.IPMask(an.runtime.Mask),
