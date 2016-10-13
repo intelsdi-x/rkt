@@ -72,7 +72,7 @@ func kvmNetArgs(nds []kvm.NetDescriber) []string {
 
 	for i := range nds {
 		qemuArgs = append(qemuArgs, []string{"-net", "nic,model=virtio"}...)
-		qemuNic := fmt.Sprintf("tap,ifname=tap%d,script=stage1/rootfs/etc/qemu-ifup.sh,downscript=stage1/rootfs/etc/qemu-ifdown.sh,vhost=on", i)
+		qemuNic := fmt.Sprintf("tap,ifname=tap%d,script=stage1/rootfs/net-tap-setup,downscript=stage1/rootfs/net-tap-teardown,vhost=on", i)
 		qemuArgs = append(qemuArgs, []string{"-net", qemuNic}...)
 	}
 
