@@ -276,10 +276,10 @@ func (n *Networking) Teardown(flavor string, debug bool) {
 	// Teardown everything in reverse order of setup.
 	// This should be idempotent -- be tolerant of missing stuff
 
-	if flavor == "kvm" {
-		n.kvmTeardown()
-		return
-	}
+	//if flavor == "kvm" {
+	//	n.kvmTeardown()
+	//	return
+	//}
 
 	if err := n.teardownForwarding(); err != nil {
 		stderr.PrintE("error removing forwarded ports", err)
