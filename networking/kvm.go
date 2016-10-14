@@ -738,8 +738,12 @@ func (an activeNet) IPMasq() bool {
 func (an activeNet) Gateway() net.IP {
 	return an.runtime.IP4.Gateway
 }
-func (an activeNet) Routes() []cnitypes.Route {
-	return an.runtime.IP4.Routes
+func (an activeNet) Routes() ([]cnitypes.Route, error) {
+	if an.runtime.IP4 != nil {
+		return an.runtime.IP4.Routes, nil
+	} else {
+		return nil, fmt.Errorf("No routes!")
+	}
 }
 
 // GetActiveNetworks returns activeNets to be used as NetDescriptors

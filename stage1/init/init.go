@@ -302,6 +302,7 @@ func getArgsEnv(p *stage1commontypes.Pod, flavor string, canMachinedRegister boo
 			cpu,
 			mem,
 			debug,
+			filepath.Base(n.GetPodNS().Path()),
 		)
 
 		if hvStartCmd == nil {
