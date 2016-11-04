@@ -54,6 +54,9 @@ func findIface(ip net.IP) (*netlink.Link, error) {
 	return nil, fmt.Errorf("Cannot find interface with IP address: %v", ip)
 }
 
+/*
+ * setupBridge: creates new bridge, attaches to it veth device and tap
+ */
 func setupBridge(brID int, net netinfo.NetInfo, tapLink *netlink.Link, nslink *netlink.Link) error {
 	brname := fmt.Sprintf("br%d", brID)
 	br := &netlink.Bridge{
@@ -75,6 +78,10 @@ func setupBridge(brID int, net netinfo.NetInfo, tapLink *netlink.Link, nslink *n
 	}
 
 	if err := netlink.LinkSetMaster(*tapLink, br); err != nil {
+		return err
+	}
+
+	if err := netlink.LinkSetUp(*tapLink); err != nil {
 		return err
 	}
 
@@ -133,6 +140,7 @@ func main() {
 		os.Exit(5)
 	}
 
+	// find veth iface, remove IP address from it
 	nsLink, err := findIface(netInfos[tapID].IP.To4())
 	if err != nil {
 		fmt.Printf("Cannot find veth interface: %v\n", err)
