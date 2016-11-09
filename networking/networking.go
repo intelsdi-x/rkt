@@ -47,10 +47,6 @@ type Networking struct {
 	nets []activeNet
 }
 
-func (n *Networking) GetPodNS() ns.NetNS {
-	return n.podNS
-}
-
 // NetConf local struct extends cnitypes.NetConf with information about masquerading
 // similar to CNI plugins
 type NetConf struct {

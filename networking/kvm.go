@@ -31,6 +31,7 @@ import (
 
 	"github.com/appc/spec/schema/types"
 	"github.com/containernetworking/cni/pkg/ip"
+	"github.com/containernetworking/cni/pkg/ns"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniutils "github.com/containernetworking/cni/pkg/utils"
 	cnisysctl "github.com/containernetworking/cni/pkg/utils/sysctl"
@@ -47,6 +48,10 @@ const (
 	defaultSubnetFile = "/run/flannel/subnet.env"
 	defaultMTU        = 1500
 )
+
+func (n *Networking) GetPodNS() ns.NetNS {
+	return n.podNS
+}
 
 type BridgeNetConf struct {
 	NetConf
